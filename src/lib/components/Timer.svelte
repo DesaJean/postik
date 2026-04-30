@@ -7,9 +7,10 @@
     noteId: string;
     timer: TimerStatePayload | null;
     flashing: boolean;
+    onChange: () => void | Promise<void>;
   }
 
-  let { noteId, timer, flashing }: Props = $props();
+  let { noteId, timer, flashing, onChange }: Props = $props();
 
   let editing = $state(false);
   let input = $state('');
@@ -43,6 +44,7 @@
       await tauri.startTimer(noteId, parsed.mode, parsed.durationSeconds);
       editing = false;
       input = '';
+      await onChange();
     } catch (e) {
       error = String(e);
     }
@@ -51,10 +53,12 @@
   async function pause() {
     if (timer?.state === 'paused') await tauri.resumeTimer(noteId);
     else await tauri.pauseTimer(noteId);
+    await onChange();
   }
 
   async function cancel() {
     await tauri.cancelTimer(noteId);
+    await onChange();
   }
 </script>
 
@@ -81,7 +85,11 @@
       <button type="submit" class="link-btn">Set</button>
     </form>
     {#if error}<span class="error">{error}</span>{/if}
-  {:else if timer && timer.state !== 'idle' && timer.state !== 'done'}
+  {:else if timer && timer.state === 'done'}
+    <span class="display done">⏱ Done</span>
+    <span class="spacer"></span>
+    <button class="link-btn dismiss" onclick={cancel} aria-label="Dismiss timer">Dismiss</button>
+  {:else if timer && (timer.state === 'running' || timer.state === 'paused')}
     <span class="display">⏱ {display()}</span>
     <span class="status">· {statusLabel()}</span>
     <span class="spacer"></span>
@@ -127,6 +135,10 @@
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
+  .display.done {
+    color: var(--accent);
+    font-weight: 600;
+  }
   .status {
     color: rgba(0, 0, 0, 0.55);
   }
@@ -140,6 +152,16 @@
   }
   .link-btn:hover {
     text-decoration: underline;
+  }
+  .link-btn.dismiss {
+    color: white;
+    background: var(--accent);
+    padding: 2px 10px;
+    border-radius: 3px;
+  }
+  .link-btn.dismiss:hover {
+    text-decoration: none;
+    background: #c64f29;
   }
   .timer-input-form {
     display: flex;

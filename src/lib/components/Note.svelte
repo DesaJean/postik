@@ -9,7 +9,7 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
-  import { playTimerDone } from '../utils/sound';
+  import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
   import type {
     ColorId,
     NoteConfig,
@@ -40,6 +40,16 @@
     document.documentElement.style.setProperty('--note-fill', c.fill);
     document.documentElement.style.setProperty('--note-border', c.border);
     document.documentElement.style.setProperty('--note-text', c.text);
+  });
+
+  // The chime loops while the timer is in 'done' state and stops the moment
+  // the user dismisses (which transitions state away from 'done').
+  $effect(() => {
+    if (timer?.state === 'done') {
+      startTimerDoneLoop();
+    } else {
+      stopTimerDoneLoop();
+    }
   });
 
   onMount(async () => {
@@ -73,8 +83,12 @@
       await listen<TimerDonePayload>('timer:done', (e) => {
         if (e.payload.note_id !== noteId) return;
         flashing = true;
-        playTimerDone();
         setTimeout(() => (flashing = false), 3000);
+        // Pomodoro auto-rolls into the next phase, so it stays in 'running'
+        // state — only countdowns end up "done" and need the dismiss UI.
+        if (e.payload.mode === 'countdown' && timer) {
+          timer = { ...timer, state: 'done', remaining_seconds: 0 };
+        }
       }),
     );
   });
@@ -82,7 +96,12 @@
   onDestroy(() => {
     cleanup.forEach((fn) => fn());
     if (saveTimer) clearTimeout(saveTimer);
+    stopTimerDoneLoop();
   });
+
+  async function refreshTimer() {
+    timer = await tauri.getTimerState(noteId);
+  }
 
   function onContentInput() {
     if (saveTimer) clearTimeout(saveTimer);
@@ -152,7 +171,7 @@
 
   <div class="bottom-bar">
     <div class="timer-wrap">
-      <Timer {noteId} {timer} {flashing} />
+      <Timer {noteId} {timer} {flashing} onChange={refreshTimer} />
     </div>
     <div class="micro-controls">
       <ColorPicker selected={colorId} onSelect={changeColor} />
