@@ -16,8 +16,14 @@ pub fn register_all(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP),
         Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyP),
     ];
+    // Register each shortcut individually and log failures instead of bailing.
+    // Why: on Windows, a Win+Shift+X combo can collide with a system shortcut
+    // and `register` returns Err — propagating that aborted app setup, which
+    // looked to users like the app launching and immediately closing.
     for combo in combos {
-        gs.register(combo)?;
+        if let Err(e) = gs.register(combo) {
+            log::warn!("global shortcut register failed ({:?}): {}", combo, e);
+        }
     }
     Ok(())
 }
