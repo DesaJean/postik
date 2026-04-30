@@ -10,6 +10,7 @@
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
   import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
+  import { settingsStore } from '../stores/settings.svelte';
   import type {
     ColorId,
     NoteConfig,
@@ -43,9 +44,10 @@
   });
 
   // The chime loops while the timer is in 'done' state and stops the moment
-  // the user dismisses (which transitions state away from 'done').
+  // the user dismisses (which transitions state away from 'done'). Respect
+  // the user's "Sound on timer end" preference — disable the loop when off.
   $effect(() => {
-    if (timer?.state === 'done') {
+    if (timer?.state === 'done' && settingsStore.soundOnTimerEnd) {
       startTimerDoneLoop();
     } else {
       stopTimerDoneLoop();
@@ -53,6 +55,7 @@
   });
 
   onMount(async () => {
+    settingsStore.load();
     const all = await tauri.listNotes();
     const found = all.find((n) => n.id === noteId);
     if (!found) {

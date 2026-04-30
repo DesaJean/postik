@@ -15,6 +15,19 @@ pub const NOTE_MIN_HEIGHT: f64 = 140.0;
 
 pub const CONTROLLER_LABEL: &str = "controller";
 
+pub const SETTING_PRIVACY_HIDE_FROM_CAPTURE: &str = "privacy_hide_from_capture";
+
+/// Read a boolean setting from storage. Returns `default` if the row is
+/// missing or the value can't be parsed — callers don't need to distinguish.
+fn read_bool_setting(storage: &Storage, key: &str, default: bool) -> bool {
+    storage
+        .get_setting(key)
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(default)
+}
+
 #[derive(Clone)]
 pub struct WindowManager {
     storage: Storage,
@@ -45,6 +58,7 @@ impl WindowManager {
     /// Build the controller window. Visible on launch so the user gets immediate
     /// feedback; subsequent visibility is toggled via tray icon and close button.
     pub fn create_controller(&self, app: &AppHandle) -> tauri::Result<()> {
+        let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
         let win =
             WebviewWindowBuilder::new(app, CONTROLLER_LABEL, WebviewUrl::App("index.html".into()))
                 .title("Postik")
@@ -53,7 +67,7 @@ impl WindowManager {
                 .resizable(true)
                 .visible(true)
                 .skip_taskbar(true)
-                .content_protected(true)
+                .content_protected(privacy)
                 .build()?;
         // The controller can be closed without quitting the app — intercept the
         // close request and hide the window instead.
@@ -153,6 +167,7 @@ impl WindowManager {
         }
         let (x, y) = self.clamp_to_monitor(app, note.x, note.y);
 
+        let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
         let url = format!("note.html?id={}", note.id);
         let win = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
             .title("")
@@ -164,7 +179,7 @@ impl WindowManager {
             .always_on_top(note.always_on_top)
             .resizable(true)
             .skip_taskbar(true)
-            .content_protected(true)
+            .content_protected(privacy)
             .build()?;
 
         self.open_labels.lock().insert(label);
@@ -245,6 +260,22 @@ impl WindowManager {
             }
         }
         Ok(())
+    }
+
+    /// Apply the privacy (content-protection) setting to every existing
+    /// window. Called when the user flips the toggle in Settings — runtime
+    /// changes don't require recreating the windows.
+    pub fn apply_privacy_to_all(&self, app: &AppHandle, enabled: bool) {
+        for w in app.webview_windows().values() {
+            if let Err(e) = w.set_content_protected(enabled) {
+                log::warn!(
+                    "set_content_protected({}) failed for {}: {}",
+                    enabled,
+                    w.label(),
+                    e
+                );
+            }
+        }
     }
 
     pub fn show_all_notes(&self, app: &AppHandle) -> tauri::Result<()> {

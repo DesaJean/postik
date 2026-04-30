@@ -1,7 +1,8 @@
 use crate::storage::{NoteRecord, Storage};
 use crate::timer::{TimerEngine, TimerMode, TimerStateSnapshot};
-use crate::window_manager::WindowManager;
-use tauri::{AppHandle, State};
+use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
 pub fn create_note(
@@ -143,4 +144,58 @@ pub fn get_timer_state(
     engine: State<TimerEngine>,
 ) -> Result<Option<TimerStateSnapshot>, String> {
     Ok(engine.snapshot(&note_id))
+}
+
+#[derive(Serialize, Clone)]
+pub struct SettingPair {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Clone)]
+struct SettingChangedPayload<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
+#[tauri::command]
+pub fn get_setting(key: String, storage: State<Storage>) -> Result<Option<String>, String> {
+    storage.get_setting(&key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_setting(
+    key: String,
+    value: String,
+    app: AppHandle,
+    storage: State<Storage>,
+    wm: State<WindowManager>,
+) -> Result<(), String> {
+    storage
+        .set_setting(&key, &value)
+        .map_err(|e| e.to_string())?;
+
+    // Side-effects for known settings.
+    if key == SETTING_PRIVACY_HIDE_FROM_CAPTURE {
+        let enabled = value == "true";
+        wm.apply_privacy_to_all(&app, enabled);
+    }
+
+    let _ = app.emit(
+        "settings:changed",
+        SettingChangedPayload {
+            key: &key,
+            value: &value,
+        },
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_settings(storage: State<Storage>) -> Result<Vec<SettingPair>, String> {
+    let pairs = storage.list_settings().map_err(|e| e.to_string())?;
+    Ok(pairs
+        .into_iter()
+        .map(|(key, value)| SettingPair { key, value })
+        .collect())
 }
