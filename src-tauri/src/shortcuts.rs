@@ -43,27 +43,22 @@ pub fn handler(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
         }
         let _ = app.emit("shortcut:new-note", ());
     } else if is_h {
-        // Stealth toggle: hide notes + controller + tray when entering, show
-        // them when leaving. Global shortcut works regardless of tray
-        // visibility, so the user can always come back from stealth.
+        // Toggle tray-icon visibility. The notes and controller are already
+        // excluded from screen capture by content_protected(true), so the
+        // tray icon (which lives in the macOS menu bar, outside any Tauri
+        // window) is the only Postik element that leaks into a screen share.
+        // Hiding it lets the user keep reading their notes while presenting.
         let tray = app.tray_by_id("postik-tray");
         if wm.is_stealth() {
             wm.set_stealth(false);
             if let Some(t) = &tray {
                 let _ = t.set_visible(true);
             }
-            let _ = wm.show_all_notes(app);
-            let _ = app.emit("shortcut:show-all", ());
         } else {
             wm.set_stealth(true);
-            let _ = wm.hide_all_notes(app);
-            if let Some(c) = app.get_webview_window("controller") {
-                let _ = c.hide();
-            }
             if let Some(t) = &tray {
                 let _ = t.set_visible(false);
             }
-            let _ = app.emit("shortcut:hide-all", ());
         }
     } else if is_t {
         if let Some(note_id) = wm.focused_note_id(app) {
