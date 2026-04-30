@@ -1,5 +1,7 @@
 export type ColorId = 'amber' | 'teal' | 'purple' | 'pink' | 'blue' | 'gray' | 'transparent';
 
+export type TextColorId = 'auto' | 'dark' | 'medium' | 'light' | 'accent';
+
 export type TimerMode = 'countdown' | 'stopwatch' | 'pomodoro';
 
 export type TimerState = 'idle' | 'running' | 'paused' | 'done';
@@ -18,6 +20,7 @@ export interface NoteConfig {
   height: number;
   created_at: number;
   updated_at: number;
+  text_color: TextColorId | null;
 }
 
 export interface TimerStatePayload {

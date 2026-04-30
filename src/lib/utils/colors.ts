@@ -1,10 +1,30 @@
-import type { ColorId } from '../types';
+import type { ColorId, TextColorId } from '../types';
 
 export interface ColorDef {
   id: ColorId;
   fill: string;
   border: string;
   text: string;
+}
+
+export interface TextColorDef {
+  id: TextColorId;
+  label: string;
+  /** Resolved hex; `null` means "use the palette's default text color". */
+  value: string | null;
+}
+
+export const TEXT_COLORS: readonly TextColorDef[] = [
+  { id: 'auto', label: 'Auto', value: null },
+  { id: 'dark', label: 'Dark', value: '#1c1c1a' },
+  { id: 'medium', label: 'Medium', value: '#5a5a55' },
+  { id: 'light', label: 'Light', value: '#fafaf7' },
+  { id: 'accent', label: 'Accent', value: '#d85a30' },
+] as const;
+
+export function resolveTextColor(textId: TextColorId | null, paletteText: string): string {
+  if (!textId || textId === 'auto') return paletteText;
+  return TEXT_COLORS.find((t) => t.id === textId)?.value ?? paletteText;
 }
 
 export const COLORS: readonly ColorDef[] = [

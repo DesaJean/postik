@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ColorId, NoteConfig, TimerMode, TimerStatePayload } from '../types';
+import type { ColorId, NoteConfig, TextColorId, TimerMode, TimerStatePayload } from '../types';
 
 export const tauri = {
   createNote: (initialPosition?: [number, number]) =>
@@ -10,6 +10,9 @@ export const tauri = {
 
   updateNoteColor: (noteId: string, colorId: ColorId) =>
     invoke<void>('update_note_color', { noteId, colorId }),
+
+  updateNoteTextColor: (noteId: string, textColor: TextColorId | null) =>
+    invoke<void>('update_note_text_color', { noteId, textColor }),
 
   updateNoteOpacity: (noteId: string, opacity: number) =>
     invoke<void>('update_note_opacity', { noteId, opacity }),

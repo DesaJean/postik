@@ -29,6 +29,7 @@ pub fn run() {
             commands::create_note,
             commands::update_note_content,
             commands::update_note_color,
+            commands::update_note_text_color,
             commands::update_note_opacity,
             commands::update_note_position,
             commands::update_note_size,

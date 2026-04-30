@@ -7,12 +7,13 @@
   import Timer from './Timer.svelte';
   import AppearancePopover from './AppearancePopover.svelte';
   import { tauri } from '../utils/tauri';
-  import { getColor } from '../utils/colors';
+  import { getColor, resolveTextColor } from '../utils/colors';
   import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
   import { settingsStore } from '../stores/settings.svelte';
   import type {
     ColorId,
     NoteConfig,
+    TextColorId,
     TimerStatePayload,
     TimerTickPayload,
     TimerDonePayload,
@@ -27,6 +28,7 @@
   let _config = $state<NoteConfig | null>(null);
   let content = $state('');
   let colorId = $state<ColorId>('amber');
+  let textColorId = $state<TextColorId>('auto');
   let opacity = $state(1);
   let pinned = $state(true);
   let timer = $state<TimerStatePayload | null>(null);
@@ -39,7 +41,10 @@
     const c = getColor(colorId);
     document.documentElement.style.setProperty('--note-fill', c.fill);
     document.documentElement.style.setProperty('--note-border', c.border);
-    document.documentElement.style.setProperty('--note-text', c.text);
+    document.documentElement.style.setProperty(
+      '--note-text',
+      resolveTextColor(textColorId, c.text),
+    );
   });
 
   // The chime loops while the timer is in 'done' state and stops the moment
@@ -64,6 +69,7 @@
     _config = found;
     content = found.content;
     colorId = found.color_id;
+    textColorId = (found.text_color ?? 'auto') as TextColorId;
     opacity = found.opacity;
     pinned = found.always_on_top;
 
@@ -115,6 +121,11 @@
   async function changeColor(id: ColorId) {
     colorId = id;
     await tauri.updateNoteColor(noteId, id);
+  }
+
+  async function changeTextColor(id: TextColorId) {
+    textColorId = id;
+    await tauri.updateNoteTextColor(noteId, id === 'auto' ? null : id);
   }
 
   async function changeOpacity(v: number) {
@@ -179,8 +190,10 @@
       <AppearancePopover
         {colorId}
         {opacity}
+        {textColorId}
         onColorChange={changeColor}
         onOpacityChange={changeOpacity}
+        onTextColorChange={changeTextColor}
       />
     </div>
   </div>
