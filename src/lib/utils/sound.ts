@@ -53,3 +53,22 @@ export function playTimerDone(): void {
   ringTone(880, now, 0.6); // A5
   ringTone(587.33, now + 0.18, 0.9, 0.14); // D5, slightly later, longer tail
 }
+
+let loopHandle: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start chiming on a 1.8s loop. Stays alive until `stopTimerDoneLoop()` is
+ * called — typically when the user dismisses the finished timer.
+ */
+export function startTimerDoneLoop(): void {
+  stopTimerDoneLoop();
+  playTimerDone();
+  loopHandle = setInterval(playTimerDone, 1800);
+}
+
+export function stopTimerDoneLoop(): void {
+  if (loopHandle !== null) {
+    clearInterval(loopHandle);
+    loopHandle = null;
+  }
+}

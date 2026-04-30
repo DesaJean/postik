@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Sound chime when a timer completes (synthesized two-note bell via Web Audio).
-
+- Sound chime when a timer completes (synthesized two-note bell via Web Audio),
+  loops every ~2s until the user dismisses.
+- Distinct "Done" state in the timer bar with a Dismiss button — replaces the
+  Pause/Cancel pair once a countdown reaches zero, so finished timers can be
+  acknowledged and cleared.
 
 ## [0.1.0] - 2026-XX-XX
 
