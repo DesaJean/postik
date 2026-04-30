@@ -9,6 +9,7 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
+  import { playTimerDone } from '../utils/sound';
   import type {
     ColorId,
     NoteConfig,
@@ -72,6 +73,7 @@
       await listen<TimerDonePayload>('timer:done', (e) => {
         if (e.payload.note_id !== noteId) return;
         flashing = true;
+        playTimerDone();
         setTimeout(() => (flashing = false), 3000);
       }),
     );
