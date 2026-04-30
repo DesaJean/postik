@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-30
+
+### Fixed
+
+- Windows: note windows rendered as a blank white box because the
+  transparent-window + content-protection combo was unreliable on WebView2.
+  Note and controller windows are now opaque on Windows (Win11 still rounds
+  frameless windows at the OS level), and content protection is skipped
+  there.
+- Default `--note-fill`/`--note-border`/`--note-text` CSS vars to amber so
+  the first paint has a valid color before Svelte's effect runs — avoids a
+  no-background flash on slow renders.
+
 ## [0.1.1] - 2026-04-30
 
 ### Added

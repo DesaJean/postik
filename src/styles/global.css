@@ -8,6 +8,13 @@
   --border-subtle: rgba(0, 0, 0, 0.08);
   --border-subtle-dark: rgba(255, 255, 255, 0.1);
   --accent: #d85a30;
+  /* Default note palette values so the first paint has a valid color before
+     the Svelte $effect runs. Without these, on Windows the .note-shell
+     evaluated color-mix() against an unset var and rendered with no
+     background — exposing the WebView2 default white. */
+  --note-fill: #faeeda;
+  --note-border: #ba7517;
+  --note-text: #412402;
 }
 
 * {
