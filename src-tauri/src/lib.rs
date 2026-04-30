@@ -45,6 +45,13 @@ pub fn run() {
             commands::get_timer_state,
         ])
         .setup(|app| {
+            // On macOS, hide Postik from the dock and Cmd-Tab. The user accesses
+            // the controller via the menu-bar tray icon — there's nothing to gain
+            // from a dock entry, and removing it also keeps the app out of
+            // screen-sharing previews of the dock area.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             // Resolve the app data dir, then open SQLite under it.
             let data_dir = app
                 .path()

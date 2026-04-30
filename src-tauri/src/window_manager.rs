@@ -31,17 +31,16 @@ impl WindowManager {
     /// Build the controller window. Visible on launch so the user gets immediate
     /// feedback; subsequent visibility is toggled via tray icon and close button.
     pub fn create_controller(&self, app: &AppHandle) -> tauri::Result<()> {
-        let win = WebviewWindowBuilder::new(
-            app,
-            CONTROLLER_LABEL,
-            WebviewUrl::App("index.html".into()),
-        )
-        .title("Postik")
-        .inner_size(360.0, 480.0)
-        .min_inner_size(320.0, 360.0)
-        .resizable(true)
-        .visible(true)
-        .build()?;
+        let win =
+            WebviewWindowBuilder::new(app, CONTROLLER_LABEL, WebviewUrl::App("index.html".into()))
+                .title("Postik")
+                .inner_size(360.0, 480.0)
+                .min_inner_size(320.0, 360.0)
+                .resizable(true)
+                .visible(true)
+                .skip_taskbar(true)
+                .content_protected(true)
+                .build()?;
         // The controller can be closed without quitting the app — intercept the
         // close request and hide the window instead.
         let label = win.label().to_string();
@@ -150,7 +149,8 @@ impl WindowManager {
             .transparent(true)
             .always_on_top(note.always_on_top)
             .resizable(true)
-            .skip_taskbar(false)
+            .skip_taskbar(true)
+            .content_protected(true)
             .build()?;
 
         self.open_labels.lock().insert(label);
