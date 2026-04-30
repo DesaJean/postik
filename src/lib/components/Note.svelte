@@ -5,8 +5,7 @@
   import { confirm } from '@tauri-apps/plugin-dialog';
   import TitleBar from './TitleBar.svelte';
   import Timer from './Timer.svelte';
-  import ColorPicker from './ColorPicker.svelte';
-  import OpacitySlider from './OpacitySlider.svelte';
+  import AppearancePopover from './AppearancePopover.svelte';
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
   import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
@@ -177,8 +176,12 @@
       <Timer {noteId} {timer} {flashing} onChange={refreshTimer} />
     </div>
     <div class="micro-controls">
-      <ColorPicker selected={colorId} onSelect={changeColor} />
-      <OpacitySlider value={opacity} onChange={changeOpacity} />
+      <AppearancePopover
+        {colorId}
+        {opacity}
+        onColorChange={changeColor}
+        onOpacityChange={changeOpacity}
+      />
     </div>
   </div>
 </div>
