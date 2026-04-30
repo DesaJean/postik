@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { parseTimerInput } from '../utils/time-parser';
+  import { formatDuration, parseTimerInput } from '../utils/time-parser';
   import { tauri } from '../utils/tauri';
   import { settingsStore } from '../stores/settings.svelte';
 
@@ -35,6 +35,24 @@
 
   let lastPreset = $derived(settingsStore.lastTimerPreset);
 
+  // Live preview of the custom input — guides the user to a valid syntax
+  // before they click Start.
+  let customParsed = $derived.by(() => {
+    const v = custom.trim();
+    if (!v) return null;
+    return parseTimerInput(v);
+  });
+  let customValid = $derived(customParsed !== null);
+  let customPreview = $derived.by(() => {
+    if (!customParsed) return null;
+    if (customParsed.mode === 'countdown' && customParsed.durationSeconds) {
+      return `Countdown · ${formatDuration(customParsed.durationSeconds)}`;
+    }
+    if (customParsed.mode === 'pomodoro') return 'Pomodoro · 25 work / 5 break';
+    if (customParsed.mode === 'stopwatch') return 'Stopwatch · counts up';
+    return null;
+  });
+
   async function startPreset(p: Preset) {
     error = null;
     try {
@@ -49,16 +67,12 @@
 
   async function startCustom() {
     error = null;
-    const parsed = parseTimerInput(custom);
-    if (!parsed) {
+    if (!customParsed) {
       error = 'Try "25m", "1h30m", "90s", "pomo", or "stopwatch"';
       return;
     }
     try {
-      await tauri.startTimer(noteId, parsed.mode, parsed.durationSeconds);
-      // Custom inputs that match a preset's id (e.g. "25m") get attributed to
-      // that preset; otherwise we clear lastPreset since the input isn't a
-      // canonical preset we can highlight.
+      await tauri.startTimer(noteId, customParsed.mode, customParsed.durationSeconds);
       const matchingPreset = presets.find((p) => p.id === custom.trim().toLowerCase());
       await settingsStore.setLastTimerPreset(matchingPreset?.id ?? '');
       custom = '';
@@ -75,20 +89,38 @@
     if (popoverEl && !popoverEl.contains(t)) onClose();
   }
 
+  function onWindowKeyDown(e: KeyboardEvent) {
+    if (!open) return;
+    if (e.key === 'Escape') {
+      onClose();
+      return;
+    }
+    // Number keys 1-6 trigger the corresponding preset, but only when the
+    // user isn't typing in the custom input.
+    const t = e.target as HTMLElement | null;
+    const typingInInput = t?.tagName === 'INPUT' || t?.tagName === 'TEXTAREA';
+    if (typingInInput) return;
+    const num = Number(e.key);
+    if (Number.isInteger(num) && num >= 1 && num <= presets.length) {
+      e.preventDefault();
+      void startPreset(presets[num - 1]);
+    }
+  }
+
   function onSubmit(e: Event) {
     e.preventDefault();
     void startCustom();
   }
 </script>
 
-<svelte:window onmousedown={onWindowMouseDown} onkeydown={(e) => e.key === 'Escape' && onClose()} />
+<svelte:window onmousedown={onWindowMouseDown} onkeydown={onWindowKeyDown} />
 
 {#if open}
   <div class="popover" bind:this={popoverEl} role="dialog" aria-label="Set timer">
     <div class="section">
       <div class="section-heading">Quick start</div>
       <div class="presets">
-        {#each presets as p (p.id)}
+        {#each presets as p, i (p.id)}
           <button
             class="preset"
             class:last-used={lastPreset === p.id}
@@ -96,11 +128,12 @@
             aria-label={`${p.label} ${p.sub ?? ''}${lastPreset === p.id ? ' — last used' : ''}`}
             title={lastPreset === p.id ? 'Last used' : undefined}
           >
+            <span class="preset-key" aria-hidden="true">{i + 1}</span>
+            {#if lastPreset === p.id}
+              <span class="last-dot" aria-hidden="true"></span>
+            {/if}
             <span class="preset-num">{p.label}</span>
             {#if p.sub}<span class="preset-sub">{p.sub}</span>{/if}
-            {#if lastPreset === p.id}
-              <span class="preset-tag" aria-hidden="true">Last</span>
-            {/if}
           </button>
         {/each}
       </div>
@@ -118,9 +151,17 @@
           bind:value={custom}
           autofocus
           aria-label="Custom timer"
+          class:invalid={custom.trim() !== '' && !customValid}
         />
-        <button type="submit" class="start-btn" disabled={!custom.trim()}>Start</button>
+        <button type="submit" class="start-btn" disabled={!customValid}>Start</button>
       </form>
+      {#if customPreview}
+        <p class="preview valid" aria-live="polite">→ {customPreview}</p>
+      {:else if custom.trim() !== '' && !customValid}
+        <p class="preview invalid" aria-live="polite">Not a valid timer</p>
+      {:else}
+        <p class="hint">Examples: 25m, 1h30m, 90s, pomo, stopwatch</p>
+      {/if}
       {#if error}<p class="error">{error}</p>{/if}
     </div>
   </div>
@@ -131,7 +172,7 @@
     position: absolute;
     bottom: calc(100% + 6px);
     left: 6px;
-    width: 220px;
+    width: 232px;
     background: rgba(255, 255, 255, 0.98);
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 8px;
@@ -185,11 +226,12 @@
     align-items: center;
     justify-content: center;
     gap: 1px;
-    height: 44px;
+    height: 48px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.04);
     border: 1px solid transparent;
     cursor: pointer;
+    overflow: hidden;
     transition:
       background-color 120ms ease-out,
       border-color 120ms ease-out,
@@ -197,31 +239,36 @@
   }
   .preset:hover {
     background: rgba(216, 90, 48, 0.08);
-    border-color: rgba(216, 90, 48, 0.3);
+    border-color: rgba(216, 90, 48, 0.35);
   }
   .preset:active {
     transform: scale(0.97);
   }
   .preset.last-used {
     border-color: var(--accent);
-    background: rgba(216, 90, 48, 0.06);
+    background: rgba(216, 90, 48, 0.07);
   }
-  .preset-tag {
+  .preset-key {
     position: absolute;
-    top: -5px;
-    right: -3px;
-    background: var(--accent);
-    color: white;
-    font-size: 8px;
+    top: 3px;
+    left: 5px;
+    font-size: 9px;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 1px 4px;
-    border-radius: 3px;
-    line-height: 1.1;
+    color: rgba(0, 0, 0, 0.32);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .last-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
   }
   .preset-num {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -255,6 +302,10 @@
     background: white;
     border-color: rgba(216, 90, 48, 0.45);
   }
+  .custom-form input.invalid {
+    border-color: rgba(216, 90, 48, 0.45);
+    background: rgba(216, 90, 48, 0.05);
+  }
   .start-btn {
     height: 28px;
     padding: 0 12px;
@@ -276,10 +327,28 @@
     cursor: not-allowed;
     background: rgba(0, 0, 0, 0.18);
   }
+
+  .preview,
+  .hint,
   .error {
-    font-size: 10px;
-    color: var(--accent);
     margin: 0;
+    font-size: 10px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview.valid {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .preview.invalid {
+    color: var(--accent);
+    opacity: 0.85;
+  }
+  .hint {
+    color: rgba(0, 0, 0, 0.4);
+  }
+  .error {
+    color: var(--accent);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -291,6 +360,9 @@
     .section-heading,
     .preset-sub {
       color: rgba(255, 255, 255, 0.55);
+    }
+    .preset-key {
+      color: rgba(255, 255, 255, 0.4);
     }
     .divider {
       background: rgba(255, 255, 255, 0.1);
@@ -307,6 +379,9 @@
     }
     .custom-form input:focus {
       background: rgba(255, 255, 255, 0.1);
+    }
+    .hint {
+      color: rgba(255, 255, 255, 0.4);
     }
   }
 </style>
