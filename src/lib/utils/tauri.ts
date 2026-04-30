@@ -34,8 +34,24 @@ export const tauri = {
   hideAllNotes: () => invoke<void>('hide_all_notes'),
   showAllNotes: () => invoke<void>('show_all_notes'),
 
-  startTimer: (noteId: string, mode: TimerMode, durationSeconds: number | null) =>
-    invoke<void>('start_timer', { noteId, mode, durationSeconds }),
+  startTimer: (
+    noteId: string,
+    mode: TimerMode,
+    durationSeconds: number | null,
+    options?: {
+      pomodoroCycles?: number | null;
+      actionPath?: string | null;
+      actionArgs?: string | null;
+    },
+  ) =>
+    invoke<void>('start_timer', {
+      noteId,
+      mode,
+      durationSeconds,
+      pomodoroCycles: options?.pomodoroCycles ?? null,
+      actionPath: options?.actionPath ?? null,
+      actionArgs: options?.actionArgs ?? null,
+    }),
 
   pauseTimer: (noteId: string) => invoke<void>('pause_timer', { noteId }),
   resumeTimer: (noteId: string) => invoke<void>('resume_timer', { noteId }),

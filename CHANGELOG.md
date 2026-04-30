@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-04-30
+
+### Added
+
+- "When timer ends, open…" per-timer action in the Set-timer popover. Pick
+  an app (.app on macOS, .exe on Windows), an optional URL/args, or both.
+  Configurations include:
+  - Countdown: launches the action when the timer reaches 0:00.
+  - Pomodoro: launches the action after the configured cycle count
+    completes (default 4 work sessions). Pomodoros without a configured
+    action keep cycling indefinitely as before.
+  - Stopwatch: launches the action when the user dismisses/cancels.
+    Last-used app + URL + cycle count are remembered across sessions.
+
 ## [0.1.2] - 2026-04-30
 
 ### Fixed

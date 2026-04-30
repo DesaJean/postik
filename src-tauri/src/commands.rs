@@ -1,5 +1,5 @@
 use crate::storage::{NoteRecord, Storage};
-use crate::timer::{TimerEngine, TimerMode, TimerStateSnapshot};
+use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -128,10 +128,22 @@ pub fn start_timer(
     note_id: String,
     mode: String,
     duration_seconds: Option<u64>,
+    pomodoro_cycles: Option<u32>,
+    action_path: Option<String>,
+    action_args: Option<String>,
     engine: State<TimerEngine>,
 ) -> Result<(), String> {
     let m = TimerMode::from_str(&mode).ok_or_else(|| format!("invalid mode: {}", mode))?;
-    engine.start(note_id, m, duration_seconds.map(|d| d as i64));
+    engine.start(
+        note_id,
+        m,
+        duration_seconds.map(|d| d as i64),
+        pomodoro_cycles,
+        PostAction {
+            path: action_path,
+            args: action_args,
+        },
+    );
     Ok(())
 }
 

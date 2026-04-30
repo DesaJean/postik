@@ -46,6 +46,22 @@ pub struct TimerRecord {
     pub state: String,
     pub pomodoro_phase: Option<String>,
     pub started_at: Option<i64>,
+    /// Path to the executable / .app bundle to launch when the timer ends.
+    /// `None` means no post-timer action.
+    #[serde(default)]
+    pub post_action_path: Option<String>,
+    /// Optional argument string (typically a URL) passed to the launched
+    /// app, or — when `post_action_path` is `None` and this is a URL —
+    /// opened in the default browser.
+    #[serde(default)]
+    pub post_action_args: Option<String>,
+    /// For pomodoro: total work cycles before auto-ending. `None` keeps the
+    /// legacy infinite cycling behaviour.
+    #[serde(default)]
+    pub pomodoro_total_cycles: Option<i64>,
+    /// For pomodoro: how many work cycles have completed so far.
+    #[serde(default)]
+    pub pomodoro_completed_cycles: Option<i64>,
 }
 
 #[derive(Clone)]
@@ -117,6 +133,17 @@ impl Storage {
         // SQLite has no `IF NOT EXISTS` for ADD COLUMN; ignoring the
         // duplicate-column error is the standard idiom.
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN text_color TEXT", []);
+        // Post-timer action + pomodoro cycle accounting. Same idiom.
+        let _ = conn.execute("ALTER TABLE timers ADD COLUMN post_action_path TEXT", []);
+        let _ = conn.execute("ALTER TABLE timers ADD COLUMN post_action_args TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE timers ADD COLUMN pomodoro_total_cycles INTEGER",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE timers ADD COLUMN pomodoro_completed_cycles INTEGER",
+            [],
+        );
         Ok(())
     }
 
@@ -280,15 +307,24 @@ impl Storage {
     pub fn upsert_timer(&self, t: &TimerRecord) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO timers (note_id, mode, duration_seconds, elapsed_seconds, state, pomodoro_phase, started_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO timers (
+                note_id, mode, duration_seconds, elapsed_seconds, state,
+                pomodoro_phase, started_at,
+                post_action_path, post_action_args,
+                pomodoro_total_cycles, pomodoro_completed_cycles
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(note_id) DO UPDATE SET
                 mode = excluded.mode,
                 duration_seconds = excluded.duration_seconds,
                 elapsed_seconds = excluded.elapsed_seconds,
                 state = excluded.state,
                 pomodoro_phase = excluded.pomodoro_phase,
-                started_at = excluded.started_at",
+                started_at = excluded.started_at,
+                post_action_path = excluded.post_action_path,
+                post_action_args = excluded.post_action_args,
+                pomodoro_total_cycles = excluded.pomodoro_total_cycles,
+                pomodoro_completed_cycles = excluded.pomodoro_completed_cycles",
             params![
                 t.note_id,
                 t.mode,
@@ -296,7 +332,11 @@ impl Storage {
                 t.elapsed_seconds,
                 t.state,
                 t.pomodoro_phase,
-                t.started_at
+                t.started_at,
+                t.post_action_path,
+                t.post_action_args,
+                t.pomodoro_total_cycles,
+                t.pomodoro_completed_cycles,
             ],
         )?;
         Ok(())
@@ -306,7 +346,10 @@ impl Storage {
     pub fn get_timer(&self, note_id: &str) -> Result<Option<TimerRecord>> {
         let conn = self.conn.lock();
         conn.query_row(
-            "SELECT note_id, mode, duration_seconds, elapsed_seconds, state, pomodoro_phase, started_at
+            "SELECT note_id, mode, duration_seconds, elapsed_seconds, state,
+                    pomodoro_phase, started_at,
+                    post_action_path, post_action_args,
+                    pomodoro_total_cycles, pomodoro_completed_cycles
              FROM timers WHERE note_id = ?1",
             [note_id],
             |r| {
@@ -318,6 +361,10 @@ impl Storage {
                     state: r.get(4)?,
                     pomodoro_phase: r.get(5)?,
                     started_at: r.get(6)?,
+                    post_action_path: r.get(7)?,
+                    post_action_args: r.get(8)?,
+                    pomodoro_total_cycles: r.get(9)?,
+                    pomodoro_completed_cycles: r.get(10)?,
                 })
             },
         )
@@ -410,6 +457,10 @@ mod tests {
             state: "running".into(),
             pomodoro_phase: None,
             started_at: Some(1),
+            post_action_path: None,
+            post_action_args: None,
+            pomodoro_total_cycles: None,
+            pomodoro_completed_cycles: None,
         })
         .unwrap();
         assert!(s.get_timer(&n.id).unwrap().is_some());
@@ -430,6 +481,10 @@ mod tests {
             state: "running".into(),
             pomodoro_phase: None,
             started_at: Some(1),
+            post_action_path: None,
+            post_action_args: None,
+            pomodoro_total_cycles: None,
+            pomodoro_completed_cycles: None,
         };
         s.upsert_timer(&t).unwrap();
         t.elapsed_seconds = 30;
