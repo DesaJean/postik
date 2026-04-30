@@ -58,8 +58,7 @@ impl WindowManager {
     /// Build the controller window. Visible on launch so the user gets immediate
     /// feedback; subsequent visibility is toggled via tray icon and close button.
     pub fn create_controller(&self, app: &AppHandle) -> tauri::Result<()> {
-        let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
-        let mut builder =
+        let builder =
             WebviewWindowBuilder::new(app, CONTROLLER_LABEL, WebviewUrl::App("index.html".into()))
                 .title("Postik")
                 .inner_size(360.0, 480.0)
@@ -69,15 +68,14 @@ impl WindowManager {
                 .skip_taskbar(true);
         // Content protection is a macOS-focused feature; on Windows the
         // WDA_EXCLUDEFROMCAPTURE flag has been observed to interfere with
-        // WebView2 rendering. See open_window_for for context.
+        // WebView2 rendering. Shadow `builder` on non-Windows to apply it
+        // without needing `let mut` (which fails the release `deny(warnings)`
+        // lint on Windows where the `mut` would be unused).
         #[cfg(not(target_os = "windows"))]
-        {
-            builder = builder.content_protected(privacy);
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let _ = privacy;
-        }
+        let builder = {
+            let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
+            builder.content_protected(privacy)
+        };
         let win = builder.build()?;
         // The controller can be closed without quitting the app — intercept the
         // close request and hide the window instead.
@@ -177,9 +175,8 @@ impl WindowManager {
         }
         let (x, y) = self.clamp_to_monitor(app, note.x, note.y);
 
-        let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
         let url = format!("note.html?id={}", note.id);
-        let mut builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+        let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
             .title("")
             .inner_size(note.width, note.height)
             .min_inner_size(NOTE_MIN_WIDTH, NOTE_MIN_HEIGHT)
@@ -196,14 +193,14 @@ impl WindowManager {
         // the visual on Windows by keeping them opaque. Likewise content
         // protection is a macOS-focused feature; skip it on Windows where
         // the WDA flag has been observed to interfere with rendering.
+        // Shadowing builder via `#[cfg]` keeps both branches free of an
+        // unused `mut` (which would fail the release `deny(warnings)` lint
+        // on the platform that doesn't reassign).
         #[cfg(not(target_os = "windows"))]
-        {
-            builder = builder.transparent(true).content_protected(privacy);
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let _ = privacy;
-        }
+        let builder = {
+            let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
+            builder.transparent(true).content_protected(privacy)
+        };
 
         let win = builder.build()?;
 
