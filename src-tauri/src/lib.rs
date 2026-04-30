@@ -43,6 +43,9 @@ pub fn run() {
             commands::resume_timer,
             commands::cancel_timer,
             commands::get_timer_state,
+            commands::get_setting,
+            commands::set_setting,
+            commands::list_settings,
         ])
         .setup(|app| {
             // On macOS, hide Postik from the dock and Cmd-Tab. The user accesses

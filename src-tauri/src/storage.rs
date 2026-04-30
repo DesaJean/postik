@@ -100,6 +100,12 @@ impl Storage {
                 started_at INTEGER,
                 FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
             ",
         )?;
         Ok(())
@@ -302,6 +308,37 @@ impl Storage {
         conn.execute("DELETE FROM timers WHERE note_id = ?1", [note_id])?;
         Ok(())
     }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock();
+        conn.query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+            r.get::<_, String>(0)
+        })
+        .optional()
+        .map_err(StorageError::from)
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO settings (key, value, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            params![key, value, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_settings(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
@@ -379,5 +416,36 @@ mod tests {
         let got = s.get_timer(&n.id).unwrap().unwrap();
         assert_eq!(got.elapsed_seconds, 30);
         assert_eq!(got.state, "paused");
+    }
+
+    #[test]
+    fn settings_set_get_overwrite() {
+        let s = open();
+        assert!(s.get_setting("missing").unwrap().is_none());
+
+        s.set_setting("privacy_hide_from_capture", "true").unwrap();
+        assert_eq!(
+            s.get_setting("privacy_hide_from_capture").unwrap().unwrap(),
+            "true"
+        );
+
+        s.set_setting("privacy_hide_from_capture", "false").unwrap();
+        assert_eq!(
+            s.get_setting("privacy_hide_from_capture").unwrap().unwrap(),
+            "false"
+        );
+    }
+
+    #[test]
+    fn settings_list_returns_all_pairs() {
+        let s = open();
+        s.set_setting("a", "1").unwrap();
+        s.set_setting("b", "two").unwrap();
+        let mut all = s.list_settings().unwrap();
+        all.sort();
+        assert_eq!(
+            all,
+            vec![("a".into(), "1".into()), ("b".into(), "two".into())]
+        );
     }
 }

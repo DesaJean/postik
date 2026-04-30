@@ -40,4 +40,10 @@ export const tauri = {
 
   getTimerState: (noteId: string) =>
     invoke<TimerStatePayload | null>('get_timer_state', { noteId }),
+
+  getSetting: (key: string) => invoke<string | null>('get_setting', { key }),
+
+  setSetting: (key: string, value: string) => invoke<void>('set_setting', { key, value }),
+
+  listSettings: () => invoke<Array<{ key: string; value: string }>>('list_settings'),
 };
