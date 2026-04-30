@@ -2,7 +2,6 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { getCurrentWindow } from '@tauri-apps/api/window';
-  import { confirm } from '@tauri-apps/plugin-dialog';
   import TitleBar from './TitleBar.svelte';
   import Timer from './Timer.svelte';
   import AppearancePopover from './AppearancePopover.svelte';
@@ -138,13 +137,10 @@
   }
 
   async function closeNote() {
-    if (content.trim().length > 0) {
-      const ok = await confirm(
-        'This note has content. Close the window? (The note is preserved and stays in the controller list.)',
-        { title: 'Close note', kind: 'warning' },
-      );
-      if (!ok) return;
-    }
+    // Closing the note window is non-destructive: the content stays in
+    // SQLite and the note remains in the controller list. Permanent
+    // deletion happens via the trash icon in the controller, which has
+    // its own confirmation. So no dialog needed here.
     await getCurrentWindow().hide();
   }
 </script>
