@@ -19,8 +19,11 @@
     const unlistenTick = listen<TimerTickPayload>('timer:tick', (event) => {
       timersByNote = { ...timersByNote, [event.payload.note_id]: event.payload };
     });
+    // The Rust shortcut handler already created the note via WindowManager;
+    // we just refresh the list so the new entry shows up here. Calling
+    // notesStore.create() would create a SECOND note.
     const unlistenShortcut = listen('shortcut:new-note', () => {
-      notesStore.create();
+      notesStore.load();
     });
 
     return async () => {
