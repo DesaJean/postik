@@ -59,16 +59,26 @@ impl WindowManager {
     /// feedback; subsequent visibility is toggled via tray icon and close button.
     pub fn create_controller(&self, app: &AppHandle) -> tauri::Result<()> {
         let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
-        let win =
+        let mut builder =
             WebviewWindowBuilder::new(app, CONTROLLER_LABEL, WebviewUrl::App("index.html".into()))
                 .title("Postik")
                 .inner_size(360.0, 480.0)
                 .min_inner_size(320.0, 360.0)
                 .resizable(true)
                 .visible(true)
-                .skip_taskbar(true)
-                .content_protected(privacy)
-                .build()?;
+                .skip_taskbar(true);
+        // Content protection is a macOS-focused feature; on Windows the
+        // WDA_EXCLUDEFROMCAPTURE flag has been observed to interfere with
+        // WebView2 rendering. See open_window_for for context.
+        #[cfg(not(target_os = "windows"))]
+        {
+            builder = builder.content_protected(privacy);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let _ = privacy;
+        }
+        let win = builder.build()?;
         // The controller can be closed without quitting the app — intercept the
         // close request and hide the window instead.
         let label = win.label().to_string();
@@ -169,18 +179,33 @@ impl WindowManager {
 
         let privacy = read_bool_setting(&self.storage, SETTING_PRIVACY_HIDE_FROM_CAPTURE, true);
         let url = format!("note.html?id={}", note.id);
-        let win = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+        let mut builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
             .title("")
             .inner_size(note.width, note.height)
             .min_inner_size(NOTE_MIN_WIDTH, NOTE_MIN_HEIGHT)
             .position(x, y)
             .decorations(false)
-            .transparent(true)
             .always_on_top(note.always_on_top)
             .resizable(true)
-            .skip_taskbar(true)
-            .content_protected(privacy)
-            .build()?;
+            .skip_taskbar(true);
+
+        // Transparent webview windows are unreliable on Windows: WebView2's
+        // composition often falls back to a solid white background when the
+        // underlying transparency fails, leaving the note rendering blank.
+        // Win11 rounds frameless windows at the OS level, so we don't lose
+        // the visual on Windows by keeping them opaque. Likewise content
+        // protection is a macOS-focused feature; skip it on Windows where
+        // the WDA flag has been observed to interfere with rendering.
+        #[cfg(not(target_os = "windows"))]
+        {
+            builder = builder.transparent(true).content_protected(privacy);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let _ = privacy;
+        }
+
+        let win = builder.build()?;
 
         self.open_labels.lock().insert(label);
 
