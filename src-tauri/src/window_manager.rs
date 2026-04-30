@@ -19,6 +19,12 @@ pub const SETTING_PRIVACY_HIDE_FROM_CAPTURE: &str = "privacy_hide_from_capture";
 
 /// Read a boolean setting from storage. Returns `default` if the row is
 /// missing or the value can't be parsed — callers don't need to distinguish.
+///
+/// Gated to non-Windows: the only callers (the privacy/content-protection
+/// branches in `create_controller` / `open_window_for`) are themselves
+/// disabled on Windows, so this function would be dead code there and
+/// the release `deny(warnings)` lint would reject the build.
+#[cfg(not(target_os = "windows"))]
 fn read_bool_setting(storage: &Storage, key: &str, default: bool) -> bool {
     storage
         .get_setting(key)

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-04-30
+
+### Fixed
+
+- Windows release build still failing in v0.1.4 because `read_bool_setting`
+  was unused on Windows (its only callers are inside the non-Windows
+  `cfg` branch), and the release `deny(warnings)` lint promotes dead-code
+  to a hard error. Gate the function with `#[cfg(not(target_os = "windows"))]`
+  too.
+
 ## [0.1.4] - 2026-04-30
 
 ### Added
