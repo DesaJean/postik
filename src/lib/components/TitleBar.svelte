@@ -23,6 +23,14 @@
     if (event.button !== 0) return;
     void getCurrentWindow().startDragging();
   }
+
+  function minimize() {
+    void getCurrentWindow().minimize();
+  }
+
+  function toggleMaximize() {
+    void getCurrentWindow().toggleMaximize();
+  }
 </script>
 
 <div
@@ -54,6 +62,38 @@
       aria-label="Open timer"
       title="Set timer">⏱</button
     >
+    <span class="separator" aria-hidden="true"></span>
+    <button
+      class="icon-btn"
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={minimize}
+      aria-label="Minimize"
+      title="Minimize"
+    >
+      <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+        <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.4" />
+      </svg>
+    </button>
+    <button
+      class="icon-btn"
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={toggleMaximize}
+      aria-label="Maximize"
+      title="Maximize"
+    >
+      <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+        <rect
+          x="1.2"
+          y="1.2"
+          width="7.6"
+          height="7.6"
+          rx="1"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+        />
+      </svg>
+    </button>
     <button
       class="icon-btn close"
       onpointerdown={(e) => e.stopPropagation()}
@@ -96,7 +136,15 @@
   }
   .actions {
     display: flex;
+    align-items: center;
     gap: 2px;
+  }
+  .separator {
+    width: 1px;
+    height: 14px;
+    margin: 0 4px;
+    background: currentColor;
+    opacity: 0.15;
   }
   .icon-btn {
     width: 22px;
@@ -108,6 +156,9 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
+  }
+  .icon-btn svg {
+    display: block;
   }
   .icon-btn:hover {
     opacity: 1;
