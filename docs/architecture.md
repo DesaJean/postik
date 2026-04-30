@@ -23,7 +23,7 @@ deeper dive on the multi-window model specifically.
 ┌────────────────────────────────────────────────────────────┐
 │              Frontend (Vite multi-page Svelte 5)           │
 │                                                            │
-│   controller.html  ──→ src/main.ts ──→ Controller.svelte   │
+│   index.html  ──→ src/main.ts ──→ Controller.svelte   │
 │   note.html?id=…   ──→ src/note.ts ──→ Note.svelte         │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -41,7 +41,7 @@ deeper dive on the multi-window model specifically.
 ## Why two HTML entry points?
 
 Each note runs in its own WebView. Tauri lets you point each window at a
-different URL or HTML file; we use `controller.html` for the main panel and
+different URL or HTML file; we use `index.html` for the main panel and
 `note.html?id=<uuid>` for note windows. The note's UUID arrives via the URL
 query string and the Svelte mount reads it before instantiating `Note.svelte`
 (see `src/note.ts`).

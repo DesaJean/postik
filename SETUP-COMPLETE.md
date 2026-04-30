@@ -116,19 +116,19 @@ git push origin v0.1.0
 These are spots where the prompt didn't fully specify behavior and I picked a
 reasonable default. Worth a quick read so you can adjust if you disagree.
 
-| Decision | What I chose | Why |
-| --- | --- | --- |
-| HTML entry-point location | Project root (`controller.html`, `note.html`) | Vite's `rollupOptions.input` resolves relative to project root by default; putting them under `src/pages/` would have forced a `root: 'src/pages'` override. Documented in `docs/architecture.md`. |
-| `×` button on a note | Hides the window after a confirmation dialog if there's content | The spec said "delete only via explicit ×, with confirmation" but also "closing should not delete from DB." I read this as: hide on close; explicit delete becomes a controller-list action (planned for v0.2). The note is never lost from SQLite. |
-| Settings modal | Empty modal with "Coming in v0.2" copy | Spec said exactly this. |
-| Pomodoro phase length | 25 min work / 5 min break, hardcoded | Standard Pomodoro values; configurable in v0.2. |
-| Notification sound | Disabled (no sound) | Spec said "default off, config in v0.2." |
-| Timer persistence cadence | Every 10 seconds while running | Compromise between durability and SQLite write volume. Pause/resume/cancel persist immediately. |
-| Tray left-click | Toggle controller visibility | Standard menubar-app convention. |
-| First-launch behavior | Controller hidden until tray click or `⌘⇧N` | Spec said the controller starts hidden. Tray icon is the entry point. |
-| `tauri-plugin-dialog` | Added (wasn't in the spec's plugin list) | Needed for the close-with-content confirmation. |
-| `parking_lot::Mutex` | Used instead of `std::sync::Mutex` | Faster and never poisons; standard in the Rust ecosystem. |
-| Code of Conduct text | Brief intro that links to the canonical Contributor Covenant 2.1 | The full text is long; linking keeps the file maintainable when the Covenant updates. |
+| Decision                  | What I chose                                                     | Why                                                                                                                                                                                                                                                 |
+| ------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTML entry-point location | Project root (`index.html`, `note.html`)                         | Vite's `rollupOptions.input` resolves relative to project root by default; putting them under `src/pages/` would have forced a `root: 'src/pages'` override. Documented in `docs/architecture.md`.                                                  |
+| `×` button on a note      | Hides the window after a confirmation dialog if there's content  | The spec said "delete only via explicit ×, with confirmation" but also "closing should not delete from DB." I read this as: hide on close; explicit delete becomes a controller-list action (planned for v0.2). The note is never lost from SQLite. |
+| Settings modal            | Empty modal with "Coming in v0.2" copy                           | Spec said exactly this.                                                                                                                                                                                                                             |
+| Pomodoro phase length     | 25 min work / 5 min break, hardcoded                             | Standard Pomodoro values; configurable in v0.2.                                                                                                                                                                                                     |
+| Notification sound        | Disabled (no sound)                                              | Spec said "default off, config in v0.2."                                                                                                                                                                                                            |
+| Timer persistence cadence | Every 10 seconds while running                                   | Compromise between durability and SQLite write volume. Pause/resume/cancel persist immediately.                                                                                                                                                     |
+| Tray left-click           | Toggle controller visibility                                     | Standard menubar-app convention.                                                                                                                                                                                                                    |
+| First-launch behavior     | Controller visible on launch                                     | Spec said "starts hidden," but with no notes yet that left users staring at a blank screen wondering whether the app launched. Tray-toggle still works after the first close.                                                                       |
+| `tauri-plugin-dialog`     | Added (wasn't in the spec's plugin list)                         | Needed for the close-with-content confirmation.                                                                                                                                                                                                     |
+| `parking_lot::Mutex`      | Used instead of `std::sync::Mutex`                               | Faster and never poisons; standard in the Rust ecosystem.                                                                                                                                                                                           |
+| Code of Conduct text      | Brief intro that links to the canonical Contributor Covenant 2.1 | The full text is long; linking keeps the file maintainable when the Covenant updates.                                                                                                                                                               |
 
 ## Parts that may need a closer look
 
@@ -191,7 +191,7 @@ cargo fmt --all -- --check
 
 ```
 postik/
-├── controller.html / note.html      # Vite multi-page entry HTMLs
+├── index.html / note.html      # Vite multi-page entry HTMLs
 ├── src/                             # Svelte 5 + TypeScript frontend
 │   ├── main.ts / note.ts            # mount points for the two windows
 │   ├── lib/components/              # Controller, Note, Timer, TitleBar, ColorPicker, OpacitySlider

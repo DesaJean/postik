@@ -28,18 +28,19 @@ impl WindowManager {
         }
     }
 
-    /// Build the controller window. Hidden by default — shown via tray icon.
+    /// Build the controller window. Visible on launch so the user gets immediate
+    /// feedback; subsequent visibility is toggled via tray icon and close button.
     pub fn create_controller(&self, app: &AppHandle) -> tauri::Result<()> {
         let win = WebviewWindowBuilder::new(
             app,
             CONTROLLER_LABEL,
-            WebviewUrl::App("controller.html".into()),
+            WebviewUrl::App("index.html".into()),
         )
         .title("Postik")
         .inner_size(360.0, 480.0)
         .min_inner_size(320.0, 360.0)
         .resizable(true)
-        .visible(false)
+        .visible(true)
         .build()?;
         // The controller can be closed without quitting the app — intercept the
         // close request and hide the window instead.
