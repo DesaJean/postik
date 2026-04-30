@@ -1,3 +1,4 @@
+use crate::launcher;
 use crate::storage::{Storage, TimerRecord};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -107,6 +108,26 @@ struct DonePayload<'a> {
     phase: Option<&'a str>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct PostAction {
+    pub path: Option<String>,
+    pub args: Option<String>,
+}
+
+impl PostAction {
+    fn is_empty(&self) -> bool {
+        self.path.as_deref().map(str::trim).unwrap_or("").is_empty()
+            && self.args.as_deref().map(str::trim).unwrap_or("").is_empty()
+    }
+
+    fn fire(&self) {
+        if self.is_empty() {
+            return;
+        }
+        launcher::launch(self.path.as_deref(), self.args.as_deref());
+    }
+}
+
 #[derive(Debug)]
 struct LiveTimer {
     mode: TimerMode,
@@ -114,6 +135,12 @@ struct LiveTimer {
     duration_seconds: Option<i64>,
     elapsed_seconds: i64,
     pomodoro_phase: Option<PomodoroPhase>,
+    /// Pomodoro work cycles to run before auto-ending. `None` keeps the
+    /// legacy infinite-cycle behaviour for callers that don't supply it.
+    pomodoro_total_cycles: Option<u32>,
+    /// Work cycles that have completed so far (incremented on Work→Break).
+    pomodoro_completed_cycles: u32,
+    post_action: PostAction,
 }
 
 impl LiveTimer {
@@ -151,6 +178,10 @@ impl LiveTimer {
             state: self.state.as_str().into(),
             pomodoro_phase: self.pomodoro_phase.map(|p| p.as_str().into()),
             started_at,
+            post_action_path: self.post_action.path.clone(),
+            post_action_args: self.post_action.args.clone(),
+            pomodoro_total_cycles: self.pomodoro_total_cycles.map(|n| n as i64),
+            pomodoro_completed_cycles: Some(self.pomodoro_completed_cycles as i64),
         }
     }
 }
@@ -173,7 +204,14 @@ impl TimerEngine {
         engine
     }
 
-    pub fn start(&self, note_id: String, mode: TimerMode, duration_seconds: Option<i64>) {
+    pub fn start(
+        &self,
+        note_id: String,
+        mode: TimerMode,
+        duration_seconds: Option<i64>,
+        pomodoro_total_cycles: Option<u32>,
+        post_action: PostAction,
+    ) {
         let timer = LiveTimer {
             mode,
             state: TimerState::Running,
@@ -184,6 +222,13 @@ impl TimerEngine {
             } else {
                 None
             },
+            pomodoro_total_cycles: if mode == TimerMode::Pomodoro {
+                pomodoro_total_cycles.filter(|n| *n > 0)
+            } else {
+                None
+            },
+            pomodoro_completed_cycles: 0,
+            post_action,
         };
         self.persist(&note_id, &timer);
         self.inner.lock().insert(note_id, timer);
@@ -210,8 +255,25 @@ impl TimerEngine {
     }
 
     pub fn cancel(&self, note_id: &str) {
-        self.inner.lock().remove(note_id);
+        // Stopwatches don't auto-end — for them, the user clicking Cancel is
+        // the natural "stop", so honour the configured post-action there.
+        // For countdown/pomodoro, Cancel means abandon, so we don't fire.
+        let action_to_fire = {
+            let mut map = self.inner.lock();
+            let action = map.get(note_id).and_then(|t| {
+                if t.mode == TimerMode::Stopwatch {
+                    Some(t.post_action.clone())
+                } else {
+                    None
+                }
+            });
+            map.remove(note_id);
+            action
+        };
         let _ = self.storage.delete_timer(note_id);
+        if let Some(action) = action_to_fire {
+            action.fire();
+        }
     }
 
     pub fn snapshot(&self, note_id: &str) -> Option<TimerStateSnapshot> {
@@ -236,6 +298,7 @@ impl TimerEngine {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 let mut to_emit_done: Vec<(String, TimerMode, Option<PomodoroPhase>, String)> =
                     Vec::new();
+                let mut actions_to_fire: Vec<PostAction> = Vec::new();
                 {
                     let mut map = inner.lock();
                     for (note_id, t) in map.iter_mut() {
@@ -268,6 +331,7 @@ impl TimerEngine {
                                             None,
                                             preview_for(&storage, note_id),
                                         ));
+                                        actions_to_fire.push(t.post_action.clone());
                                     }
                                 }
                             }
@@ -278,18 +342,36 @@ impl TimerEngine {
                                     PomodoroPhase::Break => POMODORO_BREAK_SECONDS,
                                 };
                                 if t.elapsed_seconds >= total {
-                                    let next = match phase {
-                                        PomodoroPhase::Work => PomodoroPhase::Break,
-                                        PomodoroPhase::Break => PomodoroPhase::Work,
-                                    };
+                                    // A work-session boundary counts toward the
+                                    // configured cycle limit; break boundaries
+                                    // don't.
+                                    if phase == PomodoroPhase::Work {
+                                        t.pomodoro_completed_cycles =
+                                            t.pomodoro_completed_cycles.saturating_add(1);
+                                    }
+                                    let limit_reached = t
+                                        .pomodoro_total_cycles
+                                        .map(|n| t.pomodoro_completed_cycles >= n)
+                                        .unwrap_or(false);
                                     to_emit_done.push((
                                         note_id.clone(),
                                         t.mode,
                                         Some(phase),
                                         preview_for(&storage, note_id),
                                     ));
-                                    t.pomodoro_phase = Some(next);
-                                    t.elapsed_seconds = 0;
+                                    if limit_reached {
+                                        // Stop cycling; let the frontend show
+                                        // Done and surface a Dismiss button.
+                                        t.state = TimerState::Done;
+                                        actions_to_fire.push(t.post_action.clone());
+                                    } else {
+                                        let next = match phase {
+                                            PomodoroPhase::Work => PomodoroPhase::Break,
+                                            PomodoroPhase::Break => PomodoroPhase::Work,
+                                        };
+                                        t.pomodoro_phase = Some(next);
+                                        t.elapsed_seconds = 0;
+                                    }
                                 }
                             }
                             TimerMode::Stopwatch => {}
@@ -319,6 +401,9 @@ impl TimerEngine {
                         },
                     );
                     fire_notification(&app, &preview, mode, phase);
+                }
+                for action in actions_to_fire {
+                    action.fire();
                 }
             }
         });

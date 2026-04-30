@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 mod commands;
+mod launcher;
 mod shortcuts;
 mod storage;
 mod timer;

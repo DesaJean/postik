@@ -7,6 +7,9 @@ export const SETTING_KEYS = {
   soundOnTimerEnd: 'sound_on_timer_end',
   soundChoice: 'sound_choice',
   lastTimerPreset: 'last_timer_preset',
+  lastActionPath: 'last_action_path',
+  lastActionArgs: 'last_action_args',
+  lastPomodoroCycles: 'last_pomodoro_cycles',
 } as const;
 
 const DEFAULTS = {
@@ -14,6 +17,9 @@ const DEFAULTS = {
   soundOnTimerEnd: true,
   soundChoice: 'bell' as SoundChoice,
   lastTimerPreset: '' as string,
+  lastActionPath: '' as string,
+  lastActionArgs: '' as string,
+  lastPomodoroCycles: 4 as number,
 } as const;
 
 interface ChangedPayload {
@@ -28,6 +34,9 @@ class SettingsStore {
   soundOnTimerEnd = $state<boolean>(DEFAULTS.soundOnTimerEnd);
   soundChoice = $state<SoundChoice>(DEFAULTS.soundChoice);
   lastTimerPreset = $state<string>(DEFAULTS.lastTimerPreset);
+  lastActionPath = $state<string>(DEFAULTS.lastActionPath);
+  lastActionArgs = $state<string>(DEFAULTS.lastActionArgs);
+  lastPomodoroCycles = $state<number>(DEFAULTS.lastPomodoroCycles);
   loaded = $state(false);
 
   private unlisten: UnlistenFn | null = null;
@@ -43,6 +52,9 @@ class SettingsStore {
       this.soundOnTimerEnd = bool(map.get(SETTING_KEYS.soundOnTimerEnd), DEFAULTS.soundOnTimerEnd);
       this.soundChoice = parseSoundChoice(map.get(SETTING_KEYS.soundChoice));
       this.lastTimerPreset = map.get(SETTING_KEYS.lastTimerPreset) ?? DEFAULTS.lastTimerPreset;
+      this.lastActionPath = map.get(SETTING_KEYS.lastActionPath) ?? DEFAULTS.lastActionPath;
+      this.lastActionArgs = map.get(SETTING_KEYS.lastActionArgs) ?? DEFAULTS.lastActionArgs;
+      this.lastPomodoroCycles = parseCycles(map.get(SETTING_KEYS.lastPomodoroCycles));
       this.loaded = true;
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -75,6 +87,21 @@ class SettingsStore {
     await tauri.setSetting(SETTING_KEYS.lastTimerPreset, value);
   }
 
+  async setLastActionPath(value: string) {
+    this.lastActionPath = value;
+    await tauri.setSetting(SETTING_KEYS.lastActionPath, value);
+  }
+
+  async setLastActionArgs(value: string) {
+    this.lastActionArgs = value;
+    await tauri.setSetting(SETTING_KEYS.lastActionArgs, value);
+  }
+
+  async setLastPomodoroCycles(value: number) {
+    this.lastPomodoroCycles = value;
+    await tauri.setSetting(SETTING_KEYS.lastPomodoroCycles, String(value));
+  }
+
   private applyRemote(key: string, value: string) {
     if (key === SETTING_KEYS.privacyHideFromCapture) {
       this.privacyHideFromCapture = value === 'true';
@@ -84,8 +111,21 @@ class SettingsStore {
       this.soundChoice = parseSoundChoice(value);
     } else if (key === SETTING_KEYS.lastTimerPreset) {
       this.lastTimerPreset = value;
+    } else if (key === SETTING_KEYS.lastActionPath) {
+      this.lastActionPath = value;
+    } else if (key === SETTING_KEYS.lastActionArgs) {
+      this.lastActionArgs = value;
+    } else if (key === SETTING_KEYS.lastPomodoroCycles) {
+      this.lastPomodoroCycles = parseCycles(value);
     }
   }
+}
+
+function parseCycles(raw: string | undefined): number {
+  if (!raw) return DEFAULTS.lastPomodoroCycles;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return DEFAULTS.lastPomodoroCycles;
+  return Math.min(8, Math.max(1, Math.floor(n)));
 }
 
 function parseSoundChoice(raw: string | undefined): SoundChoice {
