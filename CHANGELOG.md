@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-30
+
 ### Added
 
 - Sound chime when a timer completes (synthesized two-note bell via Web Audio),
@@ -14,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Distinct "Done" state in the timer bar with a Dismiss button — replaces the
   Pause/Cancel pair once a countdown reaches zero, so finished timers can be
   acknowledged and cleared.
+
+### Fixed
+
+- Windows: app launching and closing immediately when a global keyboard
+  shortcut collided with a system-reserved combo. Registration failures are
+  now logged instead of aborting startup.
+- Windows installer now bundles the WebView2 bootstrapper, so the app starts
+  on Windows 10 machines that don't ship with WebView2 preinstalled.
 
 ## [0.1.0] - 2026-XX-XX
 
