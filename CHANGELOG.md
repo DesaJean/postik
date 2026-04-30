@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sound chime when a timer completes (synthesized two-note bell via Web Audio).
+
+
 ## [0.1.0] - 2026-XX-XX
 
 ### Added
