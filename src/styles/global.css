@@ -1,0 +1,86 @@
+:root {
+  --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --bg-controller: #fafaf7;
+  --bg-controller-dark: #1c1c1a;
+  --text-controller: #1c1c1a;
+  --text-controller-dark: #f1f0ec;
+  --text-muted: #75736d;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-subtle-dark: rgba(255, 255, 255, 0.1);
+  --accent: #d85a30;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-system);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-controller);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body.postik-controller {
+  background: var(--bg-controller);
+}
+
+body.postik-note {
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.postik-controller {
+    background: var(--bg-controller-dark);
+    color: var(--text-controller-dark);
+  }
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+textarea {
+  resize: none;
+}
+
+/* Smooth, subtle transitions on interactive elements */
+button,
+a,
+.transition {
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out,
+    border-color 150ms ease-out,
+    opacity 150ms ease-out;
+}
