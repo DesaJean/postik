@@ -12,11 +12,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `universal-apple-darwin` isn't a real rustup target — it's a
+          # tauri-action meta-target that lipos two real targets together.
+          # We have to install BOTH real targets here.
           - os: macos-latest
-            target: universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
             args: '--target universal-apple-darwin'
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
+            rust-targets: x86_64-pc-windows-msvc
             args: ''
     runs-on: ${{ matrix.os }}
     permissions:
@@ -29,7 +32,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust-targets }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
