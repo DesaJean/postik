@@ -78,31 +78,17 @@ Once the UI looks right, record a 4-5 second demo:
 - Optional: take static screenshots (`controller.png`, `timer-running.png`,
   `colors.png`) for your GitHub social card and any blog post
 
-### 5. Create the GitHub repo and push
+### 5. GitHub repo and push
 
-Replace `jeandesa` everywhere:
-
-- `README.md` (badges, install URL, social card)
-- `CONTRIBUTING.md` (clone URL)
-- `.github/FUNDING.yml` (sponsor handle)
-- `src-tauri/Cargo.toml` (`repository = …`)
+Repo lives at <https://github.com/DesaJean/postik>. To push subsequent
+changes:
 
 ```sh
-# Quick replace (verify first):
-grep -rln 'jeandesa' . --exclude-dir=node_modules --exclude-dir=src-tauri/target
-# Then either edit by hand or:
-find . -type f \( -name '*.md' -o -name '*.toml' -o -name '*.yml' \) \
-  -not -path './node_modules/*' -not -path './src-tauri/target/*' \
-  -exec sed -i '' 's/jeandesa/your-handle/g' {} +
-
-# New commit after the v0.1.0 tag, or amend & re-tag — your call.
-git add -A
-git commit -m "chore: replace jeandesa placeholder with $YOUR_HANDLE"
-
-# Create the repo on GitHub (via gh CLI or web), then:
-git remote add origin git@github.com:jeandesa/postik.git
-git push -u origin main
-git push origin v0.1.0
+git push origin main
+# To cut a release:
+git tag vX.Y.Z && git push origin vX.Y.Z
+# The release.yml workflow builds Mac (.dmg) + Windows (.msi) binaries
+# and creates a draft GitHub Release with both attached.
 ```
 
 ### 6. (Optional) Configure GitHub Sponsors
