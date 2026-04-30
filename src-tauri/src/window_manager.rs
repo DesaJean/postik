@@ -1,6 +1,7 @@
 use crate::storage::{NoteRecord, Storage};
 use parking_lot::Mutex;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, WebviewUrl,
@@ -18,6 +19,10 @@ pub const CONTROLLER_LABEL: &str = "controller";
 pub struct WindowManager {
     storage: Storage,
     open_labels: Arc<Mutex<HashSet<String>>>,
+    /// Stealth mode: when true, the tray icon, controller, and all note
+    /// windows are hidden so nothing about Postik is visible during a screen
+    /// share. Toggled by the global ⌘⇧H shortcut.
+    stealth: Arc<AtomicBool>,
 }
 
 impl WindowManager {
@@ -25,7 +30,16 @@ impl WindowManager {
         Self {
             storage,
             open_labels: Arc::new(Mutex::new(HashSet::new())),
+            stealth: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn is_stealth(&self) -> bool {
+        self.stealth.load(Ordering::Relaxed)
+    }
+
+    pub fn set_stealth(&self, value: bool) {
+        self.stealth.store(value, Ordering::Relaxed);
     }
 
     /// Build the controller window. Visible on launch so the user gets immediate
