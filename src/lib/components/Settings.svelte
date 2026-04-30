@@ -1,12 +1,20 @@
 <script lang="ts">
   import Switch from './Switch.svelte';
   import { settingsStore } from '../stores/settings.svelte';
+  import { SOUND_CHOICES, playTimerDone, type SoundChoice } from '../utils/sound';
 
   interface Props {
     onBack: () => void;
   }
 
   let { onBack }: Props = $props();
+
+  function selectSound(id: SoundChoice) {
+    settingsStore.setSoundChoice(id);
+    // Preview the chosen variant immediately so the user hears what they
+    // picked without setting up a real timer.
+    playTimerDone(id);
+  }
 </script>
 
 <div class="settings-view">
@@ -51,7 +59,7 @@
         <div class="row-text">
           <div class="row-label">Sound on timer end</div>
           <div class="row-helper">
-            Plays a soft chime that loops until you click Dismiss on the finished timer.
+            Plays a chime that loops until you click Dismiss on the finished timer.
           </div>
         </div>
         <Switch
@@ -60,6 +68,34 @@
           label="Sound on timer end"
         />
       </div>
+
+      {#if settingsStore.soundOnTimerEnd}
+        <div class="sound-row">
+          <div class="row-label sound-row-label">Chime</div>
+          <div class="sound-list">
+            {#each SOUND_CHOICES as choice (choice.id)}
+              <button
+                class="sound-option"
+                class:selected={settingsStore.soundChoice === choice.id}
+                onclick={() => selectSound(choice.id)}
+                aria-pressed={settingsStore.soundChoice === choice.id}
+              >
+                <div class="sound-radio" aria-hidden="true">
+                  {#if settingsStore.soundChoice === choice.id}
+                    <div class="sound-radio-dot"></div>
+                  {/if}
+                </div>
+                <div class="sound-text">
+                  <div class="sound-label">{choice.label}</div>
+                  <div class="sound-desc">{choice.description}</div>
+                </div>
+                <span class="sound-preview-hint" aria-hidden="true">▸</span>
+              </button>
+            {/each}
+          </div>
+          <div class="row-helper sound-helper">Click any option to preview and select.</div>
+        </div>
+      {/if}
     </section>
 
     <p class="footer-note">
@@ -145,6 +181,84 @@
     line-height: 1.5;
   }
 
+  .sound-row {
+    padding: 0 16px 12px;
+  }
+  .sound-row-label {
+    margin-bottom: 6px;
+  }
+  .sound-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sound-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid transparent;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out;
+  }
+  .sound-option:hover {
+    background: rgba(216, 90, 48, 0.05);
+  }
+  .sound-option.selected {
+    background: rgba(216, 90, 48, 0.08);
+    border-color: rgba(216, 90, 48, 0.3);
+  }
+  .sound-radio {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 120ms ease-out;
+  }
+  .sound-option.selected .sound-radio {
+    border-color: var(--accent);
+  }
+  .sound-radio-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .sound-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .sound-label {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .sound-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+  .sound-preview-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .sound-option:hover .sound-preview-hint {
+    opacity: 0.7;
+  }
+  .sound-helper {
+    margin-top: 8px;
+  }
   .footer-note {
     font-size: 11px;
     color: var(--text-muted);
@@ -155,6 +269,18 @@
   @media (prefers-color-scheme: dark) {
     .back-btn:hover {
       background: rgba(255, 255, 255, 0.08);
+    }
+    .sound-option {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .sound-option:hover {
+      background: rgba(216, 90, 48, 0.18);
+    }
+    .sound-option.selected {
+      background: rgba(216, 90, 48, 0.22);
+    }
+    .sound-radio {
+      border-color: rgba(255, 255, 255, 0.3);
     }
   }
 </style>

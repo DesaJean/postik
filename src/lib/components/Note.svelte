@@ -52,7 +52,7 @@
   // the user's "Sound on timer end" preference — disable the loop when off.
   $effect(() => {
     if (timer?.state === 'done' && settingsStore.soundOnTimerEnd) {
-      startTimerDoneLoop();
+      startTimerDoneLoop(settingsStore.soundChoice);
     } else {
       stopTimerDoneLoop();
     }

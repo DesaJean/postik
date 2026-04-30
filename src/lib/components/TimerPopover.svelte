@@ -1,6 +1,7 @@
 <script lang="ts">
   import { parseTimerInput } from '../utils/time-parser';
   import { tauri } from '../utils/tauri';
+  import { settingsStore } from '../stores/settings.svelte';
 
   interface Props {
     noteId: string;
@@ -16,6 +17,7 @@
   let popoverEl: HTMLDivElement | undefined = $state();
 
   interface Preset {
+    id: string;
     label: string;
     sub?: string;
     mode: 'countdown' | 'pomodoro' | 'stopwatch';
@@ -23,18 +25,21 @@
   }
 
   const presets: Preset[] = [
-    { label: '5', sub: 'min', mode: 'countdown', seconds: 5 * 60 },
-    { label: '15', sub: 'min', mode: 'countdown', seconds: 15 * 60 },
-    { label: '25', sub: 'min', mode: 'countdown', seconds: 25 * 60 },
-    { label: '50', sub: 'min', mode: 'countdown', seconds: 50 * 60 },
-    { label: 'Pomo', sub: '25/5', mode: 'pomodoro', seconds: 25 * 60 },
-    { label: '∞', sub: 'stopwatch', mode: 'stopwatch', seconds: null },
+    { id: '5m', label: '5', sub: 'min', mode: 'countdown', seconds: 5 * 60 },
+    { id: '15m', label: '15', sub: 'min', mode: 'countdown', seconds: 15 * 60 },
+    { id: '25m', label: '25', sub: 'min', mode: 'countdown', seconds: 25 * 60 },
+    { id: '50m', label: '50', sub: 'min', mode: 'countdown', seconds: 50 * 60 },
+    { id: 'pomo', label: 'Pomo', sub: '25/5', mode: 'pomodoro', seconds: 25 * 60 },
+    { id: 'sw', label: '∞', sub: 'stopwatch', mode: 'stopwatch', seconds: null },
   ];
+
+  let lastPreset = $derived(settingsStore.lastTimerPreset);
 
   async function startPreset(p: Preset) {
     error = null;
     try {
       await tauri.startTimer(noteId, p.mode, p.seconds);
+      await settingsStore.setLastTimerPreset(p.id);
       await onStarted();
       onClose();
     } catch (e) {
@@ -51,6 +56,11 @@
     }
     try {
       await tauri.startTimer(noteId, parsed.mode, parsed.durationSeconds);
+      // Custom inputs that match a preset's id (e.g. "25m") get attributed to
+      // that preset; otherwise we clear lastPreset since the input isn't a
+      // canonical preset we can highlight.
+      const matchingPreset = presets.find((p) => p.id === custom.trim().toLowerCase());
+      await settingsStore.setLastTimerPreset(matchingPreset?.id ?? '');
       custom = '';
       await onStarted();
       onClose();
@@ -78,14 +88,19 @@
     <div class="section">
       <div class="section-heading">Quick start</div>
       <div class="presets">
-        {#each presets as p (p.label)}
+        {#each presets as p (p.id)}
           <button
             class="preset"
+            class:last-used={lastPreset === p.id}
             onclick={() => startPreset(p)}
-            aria-label={`${p.label} ${p.sub ?? ''}`}
+            aria-label={`${p.label} ${p.sub ?? ''}${lastPreset === p.id ? ' — last used' : ''}`}
+            title={lastPreset === p.id ? 'Last used' : undefined}
           >
             <span class="preset-num">{p.label}</span>
             {#if p.sub}<span class="preset-sub">{p.sub}</span>{/if}
+            {#if lastPreset === p.id}
+              <span class="preset-tag" aria-hidden="true">Last</span>
+            {/if}
           </button>
         {/each}
       </div>
@@ -164,6 +179,7 @@
     gap: 5px;
   }
   .preset {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -185,6 +201,24 @@
   }
   .preset:active {
     transform: scale(0.97);
+  }
+  .preset.last-used {
+    border-color: var(--accent);
+    background: rgba(216, 90, 48, 0.06);
+  }
+  .preset-tag {
+    position: absolute;
+    top: -5px;
+    right: -3px;
+    background: var(--accent);
+    color: white;
+    font-size: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1.1;
   }
   .preset-num {
     font-size: 14px;
