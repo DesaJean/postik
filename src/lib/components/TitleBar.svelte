@@ -46,6 +46,48 @@
 
   <div class="drag-spacer"></div>
 
+  <!-- Postik logo, simplified for 14px size: ring + sticky note + P -->
+  <div class="logo-mark" aria-hidden="true">
+    <svg viewBox="0 0 16 16" width="14" height="14">
+      <circle
+        cx="8"
+        cy="8"
+        r="6.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="0.9"
+        opacity="0.25"
+      />
+      <path
+        d="M 8 1.5 A 6.5 6.5 0 0 1 14.1 9.5"
+        fill="none"
+        stroke="#D85A30"
+        stroke-width="1.2"
+        stroke-linecap="round"
+      />
+      <rect
+        x="4.5"
+        y="4.5"
+        width="7"
+        height="7"
+        rx="1"
+        fill="#FAC775"
+        stroke="#854F0B"
+        stroke-width="0.4"
+      />
+      <text
+        x="8"
+        y="9.7"
+        text-anchor="middle"
+        fill="#412402"
+        style="font-size: 5.5px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;"
+        >P</text
+      >
+    </svg>
+  </div>
+
+  <div class="drag-spacer"></div>
+
   <div class="actions">
     <button
       class="icon-btn"
@@ -175,6 +217,17 @@
   .drag-spacer {
     flex: 1;
     height: 100%;
+  }
+  .logo-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+  .logo-mark svg {
+    display: block;
   }
   .dot {
     width: 7px;

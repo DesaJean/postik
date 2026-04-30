@@ -30,6 +30,11 @@ pub struct NoteRecord {
     pub height: f64,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Optional text-color override. `None` (or "auto") means inherit from
+    /// the palette's default text color. Otherwise a known token like "dark",
+    /// "medium", "light", or "accent".
+    #[serde(default)]
+    pub text_color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +113,10 @@ impl Storage {
             );
             ",
         )?;
+        // Add `text_color` column for older DBs that pre-date the feature.
+        // SQLite has no `IF NOT EXISTS` for ADD COLUMN; ignoring the
+        // duplicate-column error is the standard idiom.
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN text_color TEXT", []);
         Ok(())
     }
 
@@ -132,13 +141,14 @@ impl Storage {
             height,
             created_at: now,
             updated_at: now,
+            text_color: None,
         })
     }
 
     pub fn list_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color
              FROM notes ORDER BY updated_at DESC",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -154,6 +164,7 @@ impl Storage {
                 height: r.get(8)?,
                 created_at: r.get(9)?,
                 updated_at: r.get(10)?,
+                text_color: r.get(11)?,
             })
         })?;
         let mut out = Vec::new();
@@ -166,7 +177,7 @@ impl Storage {
     pub fn get_note(&self, id: &str) -> Result<Option<NoteRecord>> {
         let conn = self.conn.lock();
         conn.query_row(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color
              FROM notes WHERE id = ?1",
             [id],
             |r| {
@@ -182,6 +193,7 @@ impl Storage {
                     height: r.get(8)?,
                     created_at: r.get(9)?,
                     updated_at: r.get(10)?,
+                    text_color: r.get(11)?,
                 })
             },
         )
@@ -205,6 +217,16 @@ impl Storage {
         conn.execute(
             "UPDATE notes SET color_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![color_id, now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_text_color(&self, id: &str, text_color: Option<&str>) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET text_color = ?1, updated_at = ?2 WHERE id = ?3",
+            params![text_color, now, id],
         )?;
         Ok(())
     }

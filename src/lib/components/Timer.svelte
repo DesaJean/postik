@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { formatDuration, parseTimerInput } from '../utils/time-parser';
+  import { formatDuration } from '../utils/time-parser';
   import { tauri } from '../utils/tauri';
   import type { TimerStatePayload } from '../types';
+  import TimerPopover from './TimerPopover.svelte';
 
   interface Props {
     noteId: string;
@@ -12,18 +13,12 @@
 
   let { noteId, timer, flashing, onChange }: Props = $props();
 
-  let editing = $state(false);
-  let input = $state('');
-  let error = $state<string | null>(null);
+  let popoverOpen = $state(false);
 
   function display(): string {
     if (!timer) return '';
-    if (timer.mode === 'stopwatch') {
-      return formatDuration(timer.elapsed_seconds);
-    }
-    if (timer.remaining_seconds !== null) {
-      return formatDuration(timer.remaining_seconds);
-    }
+    if (timer.mode === 'stopwatch') return formatDuration(timer.elapsed_seconds);
+    if (timer.remaining_seconds !== null) return formatDuration(timer.remaining_seconds);
     return formatDuration(timer.elapsed_seconds);
   }
 
@@ -31,23 +26,6 @@
     if (!timer) return '';
     const phase = timer.pomodoro_phase ? ` · ${timer.pomodoro_phase}` : '';
     return `${timer.state}${phase}`;
-  }
-
-  async function submit() {
-    error = null;
-    const parsed = parseTimerInput(input);
-    if (!parsed) {
-      error = 'Try "25m", "1h30m", "90s", "pomo", or "stopwatch"';
-      return;
-    }
-    try {
-      await tauri.startTimer(noteId, parsed.mode, parsed.durationSeconds);
-      editing = false;
-      input = '';
-      await onChange();
-    } catch (e) {
-      error = String(e);
-    }
   }
 
   async function pause() {
@@ -63,32 +41,10 @@
 </script>
 
 <div class="timer-bar" class:flashing>
-  {#if editing}
-    <form
-      class="timer-input-form"
-      onsubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-    >
-      <!-- svelte-ignore a11y_autofocus -->
-      <input
-        type="text"
-        placeholder="25m, 1h30m, 90s, pomo, or stopwatch"
-        bind:value={input}
-        autofocus
-        onblur={() => {
-          if (!input) editing = false;
-        }}
-        onkeydown={(e) => e.key === 'Escape' && (editing = false)}
-      />
-      <button type="submit" class="link-btn">Set</button>
-    </form>
-    {#if error}<span class="error">{error}</span>{/if}
-  {:else if timer && timer.state === 'done'}
+  {#if timer && timer.state === 'done'}
     <span class="display done">⏱ Done</span>
     <span class="spacer"></span>
-    <button class="link-btn dismiss" onclick={cancel} aria-label="Dismiss timer">Dismiss</button>
+    <button class="dismiss" onclick={cancel} aria-label="Dismiss timer">Dismiss</button>
   {:else if timer && (timer.state === 'running' || timer.state === 'paused')}
     <span class="display">⏱ {display()}</span>
     <span class="status">· {statusLabel()}</span>
@@ -102,21 +58,50 @@
     </button>
     <button class="link-btn" onclick={cancel} aria-label="Cancel timer">Cancel</button>
   {:else}
-    <button class="link-btn" onclick={() => (editing = true)} aria-label="Set timer"
-      >Set timer</button
+    <button
+      class="set-btn"
+      class:active={popoverOpen}
+      onclick={() => (popoverOpen = !popoverOpen)}
+      aria-label="Set timer"
+      aria-expanded={popoverOpen}
     >
+      <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+        <circle cx="8" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2" />
+        <path
+          d="M8 5.5V8.5L9.8 9.6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+          stroke-linecap="round"
+        />
+        <path
+          d="M6.5 2L8 1L9.5 2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+          stroke-linecap="round"
+        />
+      </svg>
+      <span>Set timer</span>
+    </button>
+    <TimerPopover
+      {noteId}
+      open={popoverOpen}
+      onClose={() => (popoverOpen = false)}
+      onStarted={onChange}
+    />
   {/if}
 </div>
 
 <style>
   .timer-bar {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
     height: 24px;
     padding: 0 10px;
     font-size: 11px;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
     flex-shrink: 0;
   }
   .timer-bar.flashing {
@@ -149,39 +134,47 @@
     color: var(--accent);
     font-size: 11px;
     font-weight: 500;
+    padding: 0 4px;
   }
   .link-btn:hover {
     text-decoration: underline;
   }
-  .link-btn.dismiss {
+
+  .set-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    cursor: pointer;
+    transition: background-color 120ms ease-out;
+  }
+  .set-btn:hover,
+  .set-btn.active {
+    background: rgba(216, 90, 48, 0.1);
+  }
+
+  .dismiss {
     color: white;
     background: var(--accent);
     padding: 2px 10px;
-    border-radius: 3px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 120ms ease-out;
   }
-  .link-btn.dismiss:hover {
-    text-decoration: none;
+  .dismiss:hover {
     background: #c64f29;
   }
-  .timer-input-form {
-    display: flex;
-    flex: 1;
-    gap: 6px;
-    align-items: center;
-  }
-  .timer-input-form input {
-    flex: 1;
-    border: none;
-    background: rgba(0, 0, 0, 0.05);
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-  }
-  .timer-input-form input:focus {
-    outline: 1px solid var(--accent);
-  }
-  .error {
-    color: var(--accent);
-    font-size: 10px;
+
+  @media (prefers-color-scheme: dark) {
+    .status {
+      color: rgba(255, 255, 255, 0.55);
+    }
   }
 </style>

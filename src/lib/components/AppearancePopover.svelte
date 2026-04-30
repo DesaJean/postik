@@ -1,15 +1,20 @@
 <script lang="ts">
-  import { COLORS } from '../utils/colors';
-  import type { ColorId } from '../types';
+  import { COLORS, TEXT_COLORS, getColor } from '../utils/colors';
+  import type { ColorId, TextColorId } from '../types';
 
   interface Props {
     colorId: ColorId;
     opacity: number;
+    textColorId: TextColorId;
     onColorChange: (id: ColorId) => void;
     onOpacityChange: (value: number) => void;
+    onTextColorChange: (id: TextColorId) => void;
   }
 
-  let { colorId, opacity, onColorChange, onOpacityChange }: Props = $props();
+  let { colorId, opacity, textColorId, onColorChange, onOpacityChange, onTextColorChange }: Props =
+    $props();
+
+  let paletteText = $derived(getColor(colorId).text);
 
   let open = $state(false);
   let popoverEl: HTMLDivElement | undefined = $state();
@@ -74,6 +79,28 @@
               aria-pressed={c.id === colorId}
               title={c.id}
             ></button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="divider" aria-hidden="true"></div>
+
+      <div class="section">
+        <div class="section-heading">Text</div>
+        <div class="text-swatches">
+          {#each TEXT_COLORS as t (t.id)}
+            <button
+              class="text-swatch"
+              class:selected={t.id === textColorId}
+              class:auto={t.id === 'auto'}
+              style="--swatch-color: {t.value ?? paletteText};"
+              onclick={() => onTextColorChange(t.id)}
+              aria-label={`Text color: ${t.label}`}
+              aria-pressed={t.id === textColorId}
+              title={t.label}
+            >
+              <span class="text-swatch-glyph">A</span>
+            </button>
           {/each}
         </div>
       </div>
@@ -187,6 +214,46 @@
     grid-template-columns: repeat(7, 20px);
     gap: 6px;
   }
+
+  .text-swatches {
+    display: grid;
+    grid-template-columns: repeat(5, 26px);
+    gap: 6px;
+  }
+  .text-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--swatch-color);
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out;
+  }
+  .text-swatch-glyph {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .text-swatch:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
+  .text-swatch.selected {
+    border-color: var(--accent);
+    background: rgba(216, 90, 48, 0.08);
+  }
+  .text-swatch.auto .text-swatch-glyph {
+    background: linear-gradient(45deg, var(--swatch-color) 50%, var(--accent) 50%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
   .swatch {
     width: 20px;
     height: 20px;
@@ -284,6 +351,16 @@
     .trigger:hover,
     .trigger.active {
       background: rgba(255, 255, 255, 0.1);
+    }
+    .text-swatch {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .text-swatch:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    .text-swatch.selected {
+      background: rgba(216, 90, 48, 0.18);
     }
   }
 </style>

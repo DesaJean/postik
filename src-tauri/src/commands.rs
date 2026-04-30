@@ -36,6 +36,17 @@ pub fn update_note_color(
 }
 
 #[tauri::command]
+pub fn update_note_text_color(
+    note_id: String,
+    text_color: Option<String>,
+    storage: State<Storage>,
+) -> Result<(), String> {
+    storage
+        .update_text_color(&note_id, text_color.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn update_note_opacity(
     note_id: String,
     opacity: f64,
