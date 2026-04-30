@@ -148,11 +148,14 @@
     aria-label="Note content"
   ></textarea>
 
-  <Timer {noteId} {timer} {flashing} />
-
-  <div class="micro-controls">
-    <ColorPicker selected={colorId} onSelect={changeColor} />
-    <OpacitySlider value={opacity} onChange={changeOpacity} />
+  <div class="bottom-bar">
+    <div class="timer-wrap">
+      <Timer {noteId} {timer} {flashing} />
+    </div>
+    <div class="micro-controls">
+      <ColorPicker selected={colorId} onSelect={changeColor} />
+      <OpacitySlider value={opacity} onChange={changeOpacity} />
+    </div>
   </div>
 </div>
 
@@ -190,12 +193,26 @@
     color: inherit;
     outline: none;
   }
-  .micro-controls {
-    position: absolute;
-    bottom: 4px;
-    right: 8px;
+  .bottom-bar {
     display: flex;
+    align-items: stretch;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .timer-wrap {
+    flex: 1;
+    min-width: 0;
+  }
+  /* Timer renders its own border-top; suppress the duplicate now that
+     bottom-bar provides the divider. */
+  .timer-wrap :global(.timer-bar) {
+    border-top: none;
+  }
+  .micro-controls {
+    display: flex;
+    align-items: center;
     gap: 4px;
-    z-index: 5;
+    padding: 0 8px;
+    flex-shrink: 0;
   }
 </style>
