@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { getColor } from '../utils/colors';
   import type { ColorId } from '../types';
 
@@ -12,43 +13,50 @@
 
   let { colorId, pinned, onTogglePin, onOpenTimer, onClose }: Props = $props();
   let color = $derived(getColor(colorId));
+
+  // `data-tauri-drag-region` is the documented attribute, but it's unreliable
+  // on macOS dev builds with transparent windows — WKWebView often doesn't
+  // forward the events Tauri's drag listener needs. The programmatic
+  // `startDragging()` API works in every config; we trigger it on left-click
+  // pointerdown over the drag-handle area.
+  function startDrag(event: PointerEvent) {
+    if (event.button !== 0) return;
+    void getCurrentWindow().startDragging();
+  }
 </script>
 
-<!--
-  Drag handling: Tauri's `data-tauri-drag-region` is the documented attribute,
-  but in some dev-mode + transparent-window combinations on macOS it doesn't
-  fire reliably; pairing it with `-webkit-app-region: drag` (the legacy
-  Electron/Chromium hint, which Tauri's WebView also honors) makes drag
-  consistent. Buttons must opt OUT explicitly with both `data-tauri-drag-region="false"`
-  AND `-webkit-app-region: no-drag` or clicks get swallowed by the drag area.
--->
-<div class="title-bar" data-tauri-drag-region style="--c-border: {color.border};">
-  <div class="dots" data-tauri-drag-region aria-hidden="true">
-    <span class="dot" data-tauri-drag-region></span>
-    <span class="dot" data-tauri-drag-region></span>
+<div
+  class="title-bar"
+  style="--c-border: {color.border};"
+  onpointerdown={startDrag}
+  role="presentation"
+>
+  <div class="dots" aria-hidden="true">
+    <span class="dot"></span>
+    <span class="dot"></span>
   </div>
 
-  <div class="drag-spacer" data-tauri-drag-region></div>
+  <div class="drag-spacer"></div>
 
   <div class="actions">
     <button
       class="icon-btn"
       class:active={pinned}
-      data-tauri-drag-region="false"
+      onpointerdown={(e) => e.stopPropagation()}
       onclick={onTogglePin}
       aria-label={pinned ? 'Unpin (always-on-top)' : 'Pin (always-on-top)'}
       title={pinned ? 'Unpin' : 'Pin'}>📌</button
     >
     <button
       class="icon-btn"
-      data-tauri-drag-region="false"
+      onpointerdown={(e) => e.stopPropagation()}
       onclick={onOpenTimer}
       aria-label="Open timer"
       title="Set timer">⏱</button
     >
     <button
       class="icon-btn close"
-      data-tauri-drag-region="false"
+      onpointerdown={(e) => e.stopPropagation()}
       onclick={onClose}
       aria-label="Close note"
       title="Close">×</button
@@ -67,7 +75,6 @@
     -webkit-user-select: none;
     flex-shrink: 0;
     cursor: grab;
-    -webkit-app-region: drag;
   }
   .title-bar:active {
     cursor: grabbing;
@@ -75,12 +82,10 @@
   .dots {
     display: flex;
     gap: 4px;
-    -webkit-app-region: drag;
   }
   .drag-spacer {
     flex: 1;
     height: 100%;
-    -webkit-app-region: drag;
   }
   .dot {
     width: 8px;
@@ -92,7 +97,6 @@
   .actions {
     display: flex;
     gap: 2px;
-    -webkit-app-region: no-drag;
   }
   .icon-btn {
     width: 22px;
@@ -104,7 +108,6 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    -webkit-app-region: no-drag;
   }
   .icon-btn:hover {
     opacity: 1;
