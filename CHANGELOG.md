@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.3] - 2026-04-30
+## [0.1.4] - 2026-04-30
 
 ### Added
 
@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     action keep cycling indefinitely as before.
   - Stopwatch: launches the action when the user dismisses/cancels.
     Last-used app + URL + cycle count are remembered across sessions.
+
+### Fixed
+
+- Windows release build failing with `unused_mut` errors (the
+  `deny(warnings)` lint promoted the warning to a hard error on the
+  branch where the variable wasn't reassigned). Window builders are now
+  shadowed via `#[cfg]` instead of mutated. v0.1.2 through v0.1.3 had
+  this same issue; v0.1.4 is the first Windows-publishable build with
+  the transparent/content-protected fix.
 
 ## [0.1.2] - 2026-04-30
 
