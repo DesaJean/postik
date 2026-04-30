@@ -6,7 +6,7 @@ welcoming to contributions.
 ## Development setup
 
 ```sh
-git clone https://github.com/<USERNAME>/postik.git
+git clone https://github.com/jeandesa/postik.git
 cd postik
 npm install
 npm run tauri dev
