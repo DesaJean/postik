@@ -3,7 +3,7 @@
 > 🚧 Postik is in early development. v0.1.0 is the first public release.
 > Star the repo to follow progress.
 
-[![CI](https://github.com/<USERNAME>/postik/actions/workflows/ci.yml/badge.svg)](https://github.com/<USERNAME>/postik/actions/workflows/ci.yml)
+[![CI](https://github.com/jeandesa/postik/actions/workflows/ci.yml/badge.svg)](https://github.com/jeandesa/postik/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/built_with-Tauri%202-orange.svg)](https://v2.tauri.app/)
 [![Svelte](https://img.shields.io/badge/built_with-Svelte%205-ff3e00.svg)](https://svelte.dev/)
@@ -46,12 +46,12 @@ timers on each, and they'll stay exactly where you left them.
 ### From a release
 
 Download the latest `.dmg` (macOS) or `.msi` (Windows) from
-[Releases](https://github.com/<USERNAME>/postik/releases).
+[Releases](https://github.com/jeandesa/postik/releases).
 
 ### From source
 
 ```sh
-git clone https://github.com/<USERNAME>/postik.git
+git clone https://github.com/jeandesa/postik.git
 cd postik
 npm install
 npm run tauri dev      # development

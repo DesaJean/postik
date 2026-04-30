@@ -80,7 +80,7 @@ Once the UI looks right, record a 4-5 second demo:
 
 ### 5. Create the GitHub repo and push
 
-Replace `<USERNAME>` everywhere:
+Replace `jeandesa` everywhere:
 
 - `README.md` (badges, install URL, social card)
 - `CONTRIBUTING.md` (clone URL)
@@ -89,18 +89,18 @@ Replace `<USERNAME>` everywhere:
 
 ```sh
 # Quick replace (verify first):
-grep -rln '<USERNAME>' . --exclude-dir=node_modules --exclude-dir=src-tauri/target
+grep -rln 'jeandesa' . --exclude-dir=node_modules --exclude-dir=src-tauri/target
 # Then either edit by hand or:
 find . -type f \( -name '*.md' -o -name '*.toml' -o -name '*.yml' \) \
   -not -path './node_modules/*' -not -path './src-tauri/target/*' \
-  -exec sed -i '' 's/<USERNAME>/your-handle/g' {} +
+  -exec sed -i '' 's/jeandesa/your-handle/g' {} +
 
 # New commit after the v0.1.0 tag, or amend & re-tag — your call.
 git add -A
-git commit -m "chore: replace <USERNAME> placeholder with $YOUR_HANDLE"
+git commit -m "chore: replace jeandesa placeholder with $YOUR_HANDLE"
 
 # Create the repo on GitHub (via gh CLI or web), then:
-git remote add origin git@github.com:<USERNAME>/postik.git
+git remote add origin git@github.com:jeandesa/postik.git
 git push -u origin main
 git push origin v0.1.0
 ```
