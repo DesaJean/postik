@@ -95,7 +95,11 @@ pub fn delete_note(
     note_id: String,
     app: AppHandle,
     wm: State<WindowManager>,
+    engine: State<TimerEngine>,
 ) -> Result<(), String> {
+    // Cancel any in-flight timer first so the engine's ticking thread doesn't
+    // keep firing events for a note that no longer exists.
+    engine.cancel(&note_id);
     wm.delete_note(&app, &note_id).map_err(|e| e.to_string())
 }
 

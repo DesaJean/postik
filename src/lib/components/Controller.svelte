@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
+  import { confirm } from '@tauri-apps/plugin-dialog';
   import { notesStore } from '../stores/notes.svelte';
   import { settingsStore } from '../stores/settings.svelte';
   import { tauri } from '../utils/tauri';
@@ -49,6 +50,17 @@
   async function newNote() {
     await notesStore.create();
   }
+
+  async function deleteNote(id: string, hasContent: boolean) {
+    if (hasContent) {
+      const ok = await confirm('Delete this note? This cannot be undone.', {
+        title: 'Delete note',
+        kind: 'warning',
+      });
+      if (!ok) return;
+    }
+    await notesStore.remove(id);
+  }
 </script>
 
 <div class="shell">
@@ -95,7 +107,7 @@
           <ul class="note-list">
             {#each notesStore.notes as note (note.id)}
               {@const color = getColor(note.color_id)}
-              <li>
+              <li class="note-item">
                 <button
                   class="note-row"
                   onclick={() => focusNote(note.id)}
@@ -108,6 +120,26 @@
                   {#if timerLabel(note.id)}
                     <span class="timer-badge">{timerLabel(note.id)}</span>
                   {/if}
+                </button>
+                <button
+                  class="delete-btn"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    deleteNote(note.id, note.content.trim().length > 0);
+                  }}
+                  aria-label="Delete note"
+                  title="Delete note"
+                >
+                  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                    <path
+                      d="M3 4h10M6.5 4V2.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V4M5 4l.7 9a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 4M7 7v4M9 7v4"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
                 </button>
               </li>
             {/each}
@@ -244,6 +276,9 @@
     flex-direction: column;
     gap: 1px;
   }
+  .note-item {
+    position: relative;
+  }
   .note-row {
     width: 100%;
     display: flex;
@@ -255,8 +290,48 @@
     color: inherit;
     transition: background-color 120ms ease-out;
   }
-  .note-row:hover {
+  .note-row:hover,
+  .note-item:has(.delete-btn:hover) .note-row {
     background: rgba(0, 0, 0, 0.04);
+  }
+
+  .delete-btn {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 120ms ease-out,
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .note-item:hover .delete-btn,
+  .delete-btn:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .delete-btn:hover {
+    background: rgba(216, 90, 48, 0.12);
+    color: var(--accent);
+  }
+  /* Fade the timer badge when the row is hovered so it doesn't fight the
+     delete button for the same slot. */
+  .note-item:hover .timer-badge {
+    opacity: 0;
+  }
+  .timer-badge {
+    transition: opacity 120ms ease-out;
   }
   .dot {
     width: 8px;
