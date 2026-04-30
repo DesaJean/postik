@@ -284,9 +284,15 @@
   .custom-form {
     display: flex;
     gap: 6px;
+    align-items: stretch;
+    width: 100%;
   }
   .custom-form input {
-    flex: 1;
+    flex: 1 1 auto;
+    /* min-width: 0 lets the input shrink below its placeholder's natural
+       width — without this the long placeholder pushes the Start button
+       past the popover's right edge. */
+    min-width: 0;
     height: 28px;
     border-radius: 5px;
     background: rgba(0, 0, 0, 0.04);
@@ -307,6 +313,7 @@
     background: rgba(216, 90, 48, 0.05);
   }
   .start-btn {
+    flex-shrink: 0;
     height: 28px;
     padding: 0 12px;
     border-radius: 5px;
