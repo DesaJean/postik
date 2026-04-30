@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 
 const host = process.env.TAURI_DEV_HOST;
 
-// Multi-page setup: controller.html (main window) + note.html (per-note windows).
+// Multi-page setup: index.html is the controller window (default entry — Vite
+// auto-serves it on `/`); note.html is the per-note window template, opened
+// via `WebviewUrl::App("note.html?id=…")` from Rust.
+//
 // Both HTML files live at the project root because Vite's `rollupOptions.input`
 // resolves entries relative to the project root by default — moving them under
 // src/pages/ would force a `root: 'src/pages'` change that complicates asset
@@ -22,7 +25,7 @@ export default defineConfig(async () => ({
   build: {
     rollupOptions: {
       input: {
-        controller: resolve(__dirname, 'controller.html'),
+        index: resolve(__dirname, 'index.html'),
         note: resolve(__dirname, 'note.html'),
       },
     },

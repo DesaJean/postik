@@ -59,7 +59,7 @@ mounts:
 
 | Window          | URL loaded            | Svelte component mounted |
 | --------------- | --------------------- | ------------------------ |
-| controller      | `controller.html`     | `Controller.svelte`      |
+| controller      | `index.html`          | `Controller.svelte`      |
 | note (per note) | `note.html?id=<uuid>` | `Note.svelte`            |
 
 `src/note.ts` reads the `id` query parameter and passes it as a prop to
