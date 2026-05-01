@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-01
+
+### Fixed
+
+- Release workflow now passes `POSTIK_GOOGLE_CLIENT_ID` and
+  `POSTIK_GOOGLE_CLIENT_SECRET` from repository secrets through to
+  `tauri-action`, so published binaries actually have Google Calendar
+  credentials baked in. v0.1.8 was published before this wiring, so its
+  binaries showed "Setup needed" in the Calendar tab; v0.1.9 is the
+  first build with credentials in CI.
+
 ## [0.1.8] - 2026-05-01
 
 ### Added

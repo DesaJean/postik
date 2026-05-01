@@ -41,6 +41,11 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Baked into the binary via option_env! at compile time.
+          # When unset (e.g. forks without the secrets), the Calendar tab
+          # falls back to a "Setup needed" empty state.
+          POSTIK_GOOGLE_CLIENT_ID: ${{ secrets.POSTIK_GOOGLE_CLIENT_ID }}
+          POSTIK_GOOGLE_CLIENT_SECRET: ${{ secrets.POSTIK_GOOGLE_CLIENT_SECRET }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Postik ${{ github.ref_name }}'
