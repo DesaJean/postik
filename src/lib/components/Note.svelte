@@ -25,6 +25,9 @@
   let { noteId }: Props = $props();
 
   let _config = $state<NoteConfig | null>(null);
+  // Notes backed by a Google Calendar event are read-only — content +
+  // timer are controlled by the calendar sync, not the user.
+  let isEvent = $derived(_config?.event_id != null);
   let content = $state('');
   let colorId = $state<ColorId>('amber');
   let textColorId = $state<TextColorId>('auto');
@@ -174,8 +177,9 @@
     class="content"
     bind:value={content}
     oninput={onContentInput}
-    placeholder="Start typing…"
-    aria-label="Note content"
+    placeholder={isEvent ? '' : 'Start typing…'}
+    aria-label={isEvent ? 'Calendar event (read-only)' : 'Note content'}
+    readonly={isEvent}
   ></textarea>
 
   <div class="bottom-bar">

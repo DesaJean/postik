@@ -35,6 +35,35 @@ pub struct NoteRecord {
     /// "medium", "light", or "accent".
     #[serde(default)]
     pub text_color: Option<String>,
+    /// When set, this note is backed by a Google Calendar event. The
+    /// content (title/description) and timer are synced from Google and
+    /// the note window renders in read-only mode. Editable notes have
+    /// `event_id = None`.
+    #[serde(default)]
+    pub event_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoogleAccount {
+    pub email: String,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub access_token_expires_at: i64,
+    pub connected_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoogleEventRecord {
+    pub event_id: String,
+    pub note_id: String,
+    pub title: String,
+    pub description: String,
+    pub start_time: i64,
+    pub end_time: i64,
+    pub html_link: Option<String>,
+    pub timer_armed: bool,
+    pub timer_offset_seconds: i64,
+    pub synced_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +156,29 @@ impl Storage {
                 value TEXT NOT NULL,
                 updated_at INTEGER NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS google_account (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                email TEXT NOT NULL,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT NOT NULL,
+                access_token_expires_at INTEGER NOT NULL,
+                connected_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS google_events (
+                event_id TEXT PRIMARY KEY,
+                note_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                start_time INTEGER NOT NULL,
+                end_time INTEGER NOT NULL,
+                html_link TEXT,
+                timer_armed INTEGER NOT NULL DEFAULT 1,
+                timer_offset_seconds INTEGER NOT NULL DEFAULT 0,
+                synced_at INTEGER NOT NULL,
+                FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+            );
             ",
         )?;
         // Add `text_color` column for older DBs that pre-date the feature.
@@ -144,6 +196,9 @@ impl Storage {
             "ALTER TABLE timers ADD COLUMN pomodoro_completed_cycles INTEGER",
             [],
         );
+        // Notes get a nullable `event_id` so a row can be marked as backed
+        // by a Google Calendar event (read-only in the UI).
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN event_id TEXT", []);
         Ok(())
     }
 
@@ -169,13 +224,14 @@ impl Storage {
             created_at: now,
             updated_at: now,
             text_color: None,
+            event_id: None,
         })
     }
 
     pub fn list_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id
              FROM notes ORDER BY updated_at DESC",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -192,6 +248,7 @@ impl Storage {
                 created_at: r.get(9)?,
                 updated_at: r.get(10)?,
                 text_color: r.get(11)?,
+                event_id: r.get(12)?,
             })
         })?;
         let mut out = Vec::new();
@@ -204,7 +261,7 @@ impl Storage {
     pub fn get_note(&self, id: &str) -> Result<Option<NoteRecord>> {
         let conn = self.conn.lock();
         conn.query_row(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id
              FROM notes WHERE id = ?1",
             [id],
             |r| {
@@ -221,6 +278,7 @@ impl Storage {
                     created_at: r.get(9)?,
                     updated_at: r.get(10)?,
                     text_color: r.get(11)?,
+                    event_id: r.get(12)?,
                 })
             },
         )
@@ -407,6 +465,216 @@ impl Storage {
             out.push(r?);
         }
         Ok(out)
+    }
+
+    // ---------------- Google Calendar ----------------
+
+    pub fn save_google_account(&self, acc: &GoogleAccount) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO google_account (id, email, access_token, refresh_token, access_token_expires_at, connected_at)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                email = excluded.email,
+                access_token = excluded.access_token,
+                refresh_token = excluded.refresh_token,
+                access_token_expires_at = excluded.access_token_expires_at,
+                connected_at = excluded.connected_at",
+            params![
+                acc.email,
+                acc.access_token,
+                acc.refresh_token,
+                acc.access_token_expires_at,
+                acc.connected_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_google_account(&self) -> Result<Option<GoogleAccount>> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT email, access_token, refresh_token, access_token_expires_at, connected_at
+             FROM google_account WHERE id = 1",
+            [],
+            |r| {
+                Ok(GoogleAccount {
+                    email: r.get(0)?,
+                    access_token: r.get(1)?,
+                    refresh_token: r.get(2)?,
+                    access_token_expires_at: r.get(3)?,
+                    connected_at: r.get(4)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(StorageError::from)
+    }
+
+    pub fn clear_google_account(&self) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM google_account WHERE id = 1", [])?;
+        // Cascade delete the event-backed notes, which cascades through to
+        // their google_events rows via the FK.
+        conn.execute(
+            "DELETE FROM notes WHERE event_id IS NOT NULL",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Insert a row into `notes` linked to a Google event. Used by the
+    /// sync loop when an event arrives that has no local row yet. The
+    /// position is randomised within a small offset so multiple events
+    /// don't open stacked exactly on top of each other.
+    pub fn create_event_note(&self, event_id: &str, x: f64, y: f64) -> Result<NoteRecord> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO notes (id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, event_id)
+             VALUES (?1, '', 'blue', 1.0, 1, ?2, ?3, 280.0, 200.0, ?4, ?4, ?5)",
+            params![id, x, y, now, event_id],
+        )?;
+        Ok(NoteRecord {
+            id,
+            content: String::new(),
+            color_id: "blue".to_string(),
+            opacity: 1.0,
+            always_on_top: true,
+            x,
+            y,
+            width: 280.0,
+            height: 200.0,
+            created_at: now,
+            updated_at: now,
+            text_color: None,
+            event_id: Some(event_id.to_string()),
+        })
+    }
+
+    pub fn upsert_google_event(&self, e: &GoogleEventRecord) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO google_events (event_id, note_id, title, description, start_time, end_time, html_link, timer_armed, timer_offset_seconds, synced_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(event_id) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description,
+                start_time = excluded.start_time,
+                end_time = excluded.end_time,
+                html_link = excluded.html_link,
+                synced_at = excluded.synced_at",
+            params![
+                e.event_id,
+                e.note_id,
+                e.title,
+                e.description,
+                e.start_time,
+                e.end_time,
+                e.html_link,
+                e.timer_armed as i64,
+                e.timer_offset_seconds,
+                e.synced_at,
+            ],
+        )?;
+        // Also write the description into the linked note's content so the
+        // existing note window can render it without a special path.
+        let preview = if e.description.is_empty() {
+            e.title.clone()
+        } else {
+            format!("{}\n\n{}", e.title, e.description)
+        };
+        conn.execute(
+            "UPDATE notes SET content = ?1, updated_at = ?2 WHERE id = ?3",
+            params![preview, e.synced_at, e.note_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_google_events(&self) -> Result<Vec<GoogleEventRecord>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT event_id, note_id, title, description, start_time, end_time, html_link, timer_armed, timer_offset_seconds, synced_at
+             FROM google_events ORDER BY start_time ASC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(GoogleEventRecord {
+                event_id: r.get(0)?,
+                note_id: r.get(1)?,
+                title: r.get(2)?,
+                description: r.get(3)?,
+                start_time: r.get(4)?,
+                end_time: r.get(5)?,
+                html_link: r.get(6)?,
+                timer_armed: r.get::<_, i64>(7)? != 0,
+                timer_offset_seconds: r.get(8)?,
+                synced_at: r.get(9)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    pub fn get_google_event(&self, event_id: &str) -> Result<Option<GoogleEventRecord>> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT event_id, note_id, title, description, start_time, end_time, html_link, timer_armed, timer_offset_seconds, synced_at
+             FROM google_events WHERE event_id = ?1",
+            [event_id],
+            |r| {
+                Ok(GoogleEventRecord {
+                    event_id: r.get(0)?,
+                    note_id: r.get(1)?,
+                    title: r.get(2)?,
+                    description: r.get(3)?,
+                    start_time: r.get(4)?,
+                    end_time: r.get(5)?,
+                    html_link: r.get(6)?,
+                    timer_armed: r.get::<_, i64>(7)? != 0,
+                    timer_offset_seconds: r.get(8)?,
+                    synced_at: r.get(9)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(StorageError::from)
+    }
+
+    pub fn set_event_timer(&self, event_id: &str, armed: bool, offset_seconds: i64) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE google_events SET timer_armed = ?1, timer_offset_seconds = ?2 WHERE event_id = ?3",
+            params![armed as i64, offset_seconds, event_id],
+        )?;
+        Ok(())
+    }
+
+    /// Delete every event whose id is NOT in `keep`. Used after a sync to
+    /// prune events Google no longer returns. Their linked notes cascade.
+    pub fn prune_events_outside(&self, keep: &[String]) -> Result<()> {
+        let conn = self.conn.lock();
+        if keep.is_empty() {
+            // Wipe all event-notes (and their google_events via cascade).
+            conn.execute("DELETE FROM notes WHERE event_id IS NOT NULL", [])?;
+            return Ok(());
+        }
+        // Build a parameterised IN (?, ?, ?) query.
+        let placeholders = std::iter::repeat("?")
+            .take(keep.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "DELETE FROM notes WHERE event_id IS NOT NULL AND event_id NOT IN ({})",
+            placeholders,
+        );
+        let params_vec: Vec<&dyn rusqlite::ToSql> =
+            keep.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        conn.execute(&sql, params_vec.as_slice())?;
+        Ok(())
     }
 }
 

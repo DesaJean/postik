@@ -1,4 +1,5 @@
-use crate::storage::{NoteRecord, Storage};
+use crate::google::{self, GoogleAccountInfo, SyncRange};
+use crate::storage::{GoogleEventRecord, NoteRecord, Storage};
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
 use serde::Serialize;
@@ -225,4 +226,88 @@ pub fn list_settings(storage: State<Storage>) -> Result<Vec<SettingPair>, String
         .into_iter()
         .map(|(key, value)| SettingPair { key, value })
         .collect())
+}
+
+// ---------------- Google Calendar ----------------
+
+#[tauri::command]
+pub fn google_is_configured() -> bool {
+    google::is_configured()
+}
+
+#[tauri::command]
+pub async fn google_connect(
+    app: AppHandle,
+    storage: State<'_, Storage>,
+) -> Result<GoogleAccountInfo, String> {
+    let info = google::connect(&storage).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("google:account-changed", &info);
+    Ok(info)
+}
+
+#[tauri::command]
+pub fn google_disconnect(app: AppHandle, storage: State<Storage>) -> Result<(), String> {
+    google::disconnect(&storage).map_err(|e| e.to_string())?;
+    let _ = app.emit("google:account-changed", serde_json::Value::Null);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn google_account(storage: State<Storage>) -> Result<Option<GoogleAccountInfo>, String> {
+    google::account(&storage).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn google_sync(
+    range_kind: String,
+    range_start: Option<i64>,
+    range_end: Option<i64>,
+    app: AppHandle,
+    storage: State<'_, Storage>,
+    engine: State<'_, TimerEngine>,
+) -> Result<Vec<GoogleEventRecord>, String> {
+    let range = SyncRange::from_kind(&range_kind, range_start, range_end)
+        .ok_or_else(|| format!("invalid sync range: {}", range_kind))?;
+    let events = google::sync(&storage, &engine, range)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("google:events-synced", &events);
+    Ok(events)
+}
+
+#[tauri::command]
+pub fn google_list_events(storage: State<Storage>) -> Result<Vec<GoogleEventRecord>, String> {
+    storage.list_google_events().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn google_set_event_timer(
+    event_id: String,
+    armed: bool,
+    offset_seconds: i64,
+    storage: State<Storage>,
+    engine: State<TimerEngine>,
+) -> Result<(), String> {
+    storage
+        .set_event_timer(&event_id, armed, offset_seconds)
+        .map_err(|e| e.to_string())?;
+    if let Ok(Some(ev)) = storage.get_google_event(&event_id) {
+        let now = chrono::Utc::now().timestamp();
+        google::schedule_event_timer(&engine, &ev, now);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn google_open_event(
+    event_id: String,
+    app: AppHandle,
+    storage: State<Storage>,
+    wm: State<WindowManager>,
+) -> Result<(), String> {
+    let ev = storage
+        .get_google_event(&event_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("event not found: {}", event_id))?;
+    wm.focus_note(&app, &ev.note_id).map_err(|e| e.to_string())
 }

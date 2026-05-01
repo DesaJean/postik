@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-01
+
+### Added
+
+- **Google Calendar integration.** New "Calendar" tab in the controller
+  syncs your primary calendar's events into Postik as read-only notes.
+  Each event has a configurable alarm offset (at start / 5m / 10m / 15m
+  before) and a per-event timer toggle; the existing notification + chime
+  fires at the offset time. Default sync range is today; "7 days" chip
+  switches it. Auto-sync runs every 15 min when enabled (in the Calendar
+  tab). Disconnecting clears the tokens and all event-backed notes;
+  regular notes are untouched.
+- Read-only mode for note windows: when a note is event-backed, the
+  textarea becomes read-only.
+- One-time Google Cloud setup is documented in
+  `docs/google-calendar-setup.md`. Until the env vars
+  `POSTIK_GOOGLE_CLIENT_ID` and `POSTIK_GOOGLE_CLIENT_SECRET` are
+  configured at build time, the Calendar tab shows a "Setup needed"
+  state — the rest of the app is unaffected.
+
+### Implementation notes
+
+- Auth uses standard OAuth 2.0 with PKCE and a one-shot loopback
+  redirect listener. No browser embed inside Tauri.
+- Tokens persist in the existing SQLite DB under `app_data_dir/postik.db`.
+- Per-event countdowns reuse the existing `TimerEngine`; no new alarm
+  system was introduced.
+
 ## [0.1.7] - 2026-05-01
 
 ### Fixed

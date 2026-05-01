@@ -10,6 +10,7 @@ export const SETTING_KEYS = {
   lastActionPath: 'last_action_path',
   lastActionArgs: 'last_action_args',
   lastPomodoroCycles: 'last_pomodoro_cycles',
+  googleCalendarAutoSync: 'google_calendar_auto_sync',
 } as const;
 
 const DEFAULTS = {
@@ -20,6 +21,7 @@ const DEFAULTS = {
   lastActionPath: '' as string,
   lastActionArgs: '' as string,
   lastPomodoroCycles: 4 as number,
+  googleCalendarAutoSync: false,
 } as const;
 
 interface ChangedPayload {
@@ -37,6 +39,7 @@ class SettingsStore {
   lastActionPath = $state<string>(DEFAULTS.lastActionPath);
   lastActionArgs = $state<string>(DEFAULTS.lastActionArgs);
   lastPomodoroCycles = $state<number>(DEFAULTS.lastPomodoroCycles);
+  googleCalendarAutoSync = $state<boolean>(DEFAULTS.googleCalendarAutoSync);
   loaded = $state(false);
 
   private unlisten: UnlistenFn | null = null;
@@ -55,6 +58,10 @@ class SettingsStore {
       this.lastActionPath = map.get(SETTING_KEYS.lastActionPath) ?? DEFAULTS.lastActionPath;
       this.lastActionArgs = map.get(SETTING_KEYS.lastActionArgs) ?? DEFAULTS.lastActionArgs;
       this.lastPomodoroCycles = parseCycles(map.get(SETTING_KEYS.lastPomodoroCycles));
+      this.googleCalendarAutoSync = bool(
+        map.get(SETTING_KEYS.googleCalendarAutoSync),
+        DEFAULTS.googleCalendarAutoSync,
+      );
       this.loaded = true;
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -102,6 +109,11 @@ class SettingsStore {
     await tauri.setSetting(SETTING_KEYS.lastPomodoroCycles, String(value));
   }
 
+  async setGoogleCalendarAutoSync(value: boolean) {
+    this.googleCalendarAutoSync = value;
+    await tauri.setSetting(SETTING_KEYS.googleCalendarAutoSync, String(value));
+  }
+
   private applyRemote(key: string, value: string) {
     if (key === SETTING_KEYS.privacyHideFromCapture) {
       this.privacyHideFromCapture = value === 'true';
@@ -117,6 +129,8 @@ class SettingsStore {
       this.lastActionArgs = value;
     } else if (key === SETTING_KEYS.lastPomodoroCycles) {
       this.lastPomodoroCycles = parseCycles(value);
+    } else if (key === SETTING_KEYS.googleCalendarAutoSync) {
+      this.googleCalendarAutoSync = value === 'true';
     }
   }
 }

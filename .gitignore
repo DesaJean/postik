@@ -16,6 +16,9 @@ build
 # Rust / Tauri
 src-tauri/target
 src-tauri/gen/schemas
+# Local-only OAuth client credentials for Google Calendar.
+# See docs/google-calendar-setup.md.
+src-tauri/.cargo/config.toml
 
 # SQLite (local dev DBs)
 *.db

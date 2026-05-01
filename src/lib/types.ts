@@ -21,7 +21,30 @@ export interface NoteConfig {
   created_at: number;
   updated_at: number;
   text_color: TextColorId | null;
+  /** Set when this note is backed by a Google Calendar event. The note
+   * is rendered read-only and its content is synced from Google. */
+  event_id: string | null;
 }
+
+export interface GoogleAccountInfo {
+  email: string;
+  connected_at: number;
+}
+
+export interface GoogleEventRecord {
+  event_id: string;
+  note_id: string;
+  title: string;
+  description: string;
+  start_time: number;
+  end_time: number;
+  html_link: string | null;
+  timer_armed: boolean;
+  timer_offset_seconds: number;
+  synced_at: number;
+}
+
+export type SyncRangeKind = 'today' | 'seven_days' | 'custom';
 
 export interface TimerStatePayload {
   note_id: string;

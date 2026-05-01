@@ -9,9 +9,11 @@
   import type { TimerTickPayload } from '../types';
   import { formatDuration } from '../utils/time-parser';
   import Settings from './Settings.svelte';
+  import Calendar from './Calendar.svelte';
 
   let timersByNote = $state<Record<string, TimerTickPayload>>({});
   let view = $state<'notes' | 'settings'>('notes');
+  let tab = $state<'notes' | 'calendar'>('notes');
 
   onMount(() => {
     notesStore.load();
@@ -68,7 +70,24 @@
     <!-- Notes view -->
     <section class="pane">
       <header class="header">
-        <h1>Postik</h1>
+        <div class="tabs">
+          <button
+            class="tab"
+            class:active={tab === 'notes'}
+            onclick={() => (tab = 'notes')}
+            aria-pressed={tab === 'notes'}
+          >
+            Notes
+          </button>
+          <button
+            class="tab"
+            class:active={tab === 'calendar'}
+            onclick={() => (tab = 'calendar')}
+            aria-pressed={tab === 'calendar'}
+          >
+            Calendar
+          </button>
+        </div>
         <button
           class="header-btn"
           onclick={() => (view = 'settings')}
@@ -88,64 +107,68 @@
         </button>
       </header>
 
-      <div class="cta-row">
-        <button class="new-note-btn" onclick={newNote} aria-label="Create new note">
-          <span class="plus">+</span>
-          <span>New note</span>
-        </button>
-      </div>
+      {#if tab === 'notes'}
+        <div class="cta-row">
+          <button class="new-note-btn" onclick={newNote} aria-label="Create new note">
+            <span class="plus">+</span>
+            <span>New note</span>
+          </button>
+        </div>
 
-      <main class="list-wrap">
-        {#if notesStore.loading}
-          <div class="empty-state">Loading…</div>
-        {:else if notesStore.notes.length === 0}
-          <div class="empty-state">
-            <p>No notes yet.</p>
-            <p class="muted">Press <kbd>⌘⇧N</kbd> or click "New note".</p>
-          </div>
-        {:else}
-          <ul class="note-list">
-            {#each notesStore.notes as note (note.id)}
-              {@const color = getColor(note.color_id)}
-              <li class="note-item">
-                <button
-                  class="note-row"
-                  onclick={() => focusNote(note.id)}
-                  aria-label={`Open note: ${note.content.slice(0, 40) || '(empty)'}`}
-                >
-                  <span class="dot" style="background: {color.border};" aria-hidden="true"></span>
-                  <span class="preview">
-                    {note.content.slice(0, 40) || '(empty note)'}
-                  </span>
-                  {#if timerLabel(note.id)}
-                    <span class="timer-badge">{timerLabel(note.id)}</span>
-                  {/if}
-                </button>
-                <button
-                  class="delete-btn"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    deleteNote(note.id, note.content.trim().length > 0);
-                  }}
-                  aria-label="Delete note"
-                  title="Delete note"
-                >
-                  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                    <path
-                      d="M3 4h10M6.5 4V2.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V4M5 4l.7 9a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 4M7 7v4M9 7v4"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </main>
+        <main class="list-wrap">
+          {#if notesStore.loading}
+            <div class="empty-state">Loading…</div>
+          {:else if notesStore.notes.length === 0}
+            <div class="empty-state">
+              <p>No notes yet.</p>
+              <p class="muted">Press <kbd>⌘⇧N</kbd> or click "New note".</p>
+            </div>
+          {:else}
+            <ul class="note-list">
+              {#each notesStore.notes as note (note.id)}
+                {@const color = getColor(note.color_id)}
+                <li class="note-item">
+                  <button
+                    class="note-row"
+                    onclick={() => focusNote(note.id)}
+                    aria-label={`Open note: ${note.content.slice(0, 40) || '(empty)'}`}
+                  >
+                    <span class="dot" style="background: {color.border};" aria-hidden="true"></span>
+                    <span class="preview">
+                      {note.content.slice(0, 40) || '(empty note)'}
+                    </span>
+                    {#if timerLabel(note.id)}
+                      <span class="timer-badge">{timerLabel(note.id)}</span>
+                    {/if}
+                  </button>
+                  <button
+                    class="delete-btn"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      deleteNote(note.id, note.content.trim().length > 0);
+                    }}
+                    aria-label="Delete note"
+                    title="Delete note"
+                  >
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                      <path
+                        d="M3 4h10M6.5 4V2.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V4M5 4l.7 9a1 1 0 0 0 1 .9h2.6a1 1 0 0 0 1-.9L11 4M7 7v4M9 7v4"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </main>
+      {:else}
+        <Calendar />
+      {/if}
     </section>
 
     <!-- Settings view -->
@@ -189,11 +212,29 @@
     border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
   }
-  .header h1 {
-    font-size: 14px;
+  .tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .tab {
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 12px;
     font-weight: 600;
-    margin: 0;
-    letter-spacing: -0.01em;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .tab:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: inherit;
+  }
+  .tab.active {
+    background: rgba(216, 90, 48, 0.1);
+    color: var(--accent);
   }
   .header-btn {
     display: flex;

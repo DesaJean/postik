@@ -1,5 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ColorId, NoteConfig, TextColorId, TimerMode, TimerStatePayload } from '../types';
+import type {
+  ColorId,
+  GoogleAccountInfo,
+  GoogleEventRecord,
+  NoteConfig,
+  SyncRangeKind,
+  TextColorId,
+  TimerMode,
+  TimerStatePayload,
+} from '../types';
 
 export const tauri = {
   createNote: (initialPosition?: [number, number]) =>
@@ -65,4 +74,24 @@ export const tauri = {
   setSetting: (key: string, value: string) => invoke<void>('set_setting', { key, value }),
 
   listSettings: () => invoke<Array<{ key: string; value: string }>>('list_settings'),
+
+  // Google Calendar
+  googleIsConfigured: () => invoke<boolean>('google_is_configured'),
+  googleConnect: () => invoke<GoogleAccountInfo>('google_connect'),
+  googleDisconnect: () => invoke<void>('google_disconnect'),
+  googleAccount: () => invoke<GoogleAccountInfo | null>('google_account'),
+  googleSync: (
+    rangeKind: SyncRangeKind,
+    rangeStart: number | null = null,
+    rangeEnd: number | null = null,
+  ) =>
+    invoke<GoogleEventRecord[]>('google_sync', {
+      rangeKind,
+      rangeStart,
+      rangeEnd,
+    }),
+  googleListEvents: () => invoke<GoogleEventRecord[]>('google_list_events'),
+  googleSetEventTimer: (eventId: string, armed: boolean, offsetSeconds: number) =>
+    invoke<void>('google_set_event_timer', { eventId, armed, offsetSeconds }),
+  googleOpenEvent: (eventId: string) => invoke<void>('google_open_event', { eventId }),
 };

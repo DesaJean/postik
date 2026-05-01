@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 mod commands;
+mod google;
 mod launcher;
 mod shortcuts;
 mod storage;
@@ -48,6 +49,14 @@ pub fn run() {
             commands::get_setting,
             commands::set_setting,
             commands::list_settings,
+            commands::google_is_configured,
+            commands::google_connect,
+            commands::google_disconnect,
+            commands::google_account,
+            commands::google_sync,
+            commands::google_list_events,
+            commands::google_set_event_timer,
+            commands::google_open_event,
         ])
         .setup(|app| {
             // On macOS, hide Postik from the dock and Cmd-Tab. The user accesses
@@ -137,8 +146,44 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Background auto-sync for Google Calendar. Runs every 15 min;
+            // each iteration checks the `google_calendar_auto_sync`
+            // setting and syncs the default range when enabled. The setting
+            // is read fresh each tick so toggling it from the UI takes
+            // effect on the next iteration without a restart.
+            spawn_google_auto_sync(app.handle().clone());
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Spawns a tokio task that, every 15 minutes, checks if the user has
+/// enabled `google_calendar_auto_sync` and runs a sync if so. Errors are
+/// logged and swallowed — auto-sync should never crash the app.
+fn spawn_google_auto_sync(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let interval = std::time::Duration::from_secs(15 * 60);
+        loop {
+            tokio::time::sleep(interval).await;
+            let storage: tauri::State<Storage> = app.state();
+            let engine: tauri::State<TimerEngine> = app.state();
+            let enabled = storage
+                .get_setting("google_calendar_auto_sync")
+                .ok()
+                .flatten()
+                .map(|v| v == "true")
+                .unwrap_or(false);
+            if !enabled {
+                continue;
+            }
+            match google::sync(&storage, &engine, google::SyncRange::Today).await {
+                Ok(events) => {
+                    let _ = tauri::Emitter::emit(&app, "google:events-synced", &events);
+                }
+                Err(e) => log::warn!("auto-sync failed: {}", e),
+            }
+        }
+    });
 }
