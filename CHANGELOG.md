@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-05-01
+
+### Fixed
+
+- Calendar event timer alarm could not be silenced from the Calendar
+  tab's bell toggle: the chime in the open note window kept looping
+  because nothing told the frontend that the backend had cancelled the
+  timer. `TimerEngine::cancel` now emits a `timer:cancelled` event and
+  the note window listens to it, dropping its local timer state and
+  stopping the chime. The Dismiss button inside the note window also
+  benefits — any code path that cancels a timer (Dismiss, calendar
+  bell, auto-sync prune) now propagates to every open window.
+
 ## [0.1.9] - 2026-05-01
 
 ### Fixed

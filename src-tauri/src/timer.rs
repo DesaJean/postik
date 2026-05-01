@@ -258,7 +258,7 @@ impl TimerEngine {
         // Stopwatches don't auto-end — for them, the user clicking Cancel is
         // the natural "stop", so honour the configured post-action there.
         // For countdown/pomodoro, Cancel means abandon, so we don't fire.
-        let action_to_fire = {
+        let (had_timer, action_to_fire) = {
             let mut map = self.inner.lock();
             let action = map.get(note_id).and_then(|t| {
                 if t.mode == TimerMode::Stopwatch {
@@ -267,12 +267,24 @@ impl TimerEngine {
                     None
                 }
             });
-            map.remove(note_id);
-            action
+            let existed = map.remove(note_id).is_some();
+            (existed, action)
         };
         let _ = self.storage.delete_timer(note_id);
         if let Some(action) = action_to_fire {
             action.fire();
+        }
+        // Tell every open window the timer is gone so any chime / Done UI
+        // bound to this note shuts down. Without this, dismissing the
+        // alarm via the Calendar tab's bell — or via auto-sync's implicit
+        // cleanup — left an open note window stuck in the "Done" state
+        // because nothing told the frontend to refresh.
+        if had_timer {
+            #[derive(serde::Serialize, Clone)]
+            struct CancelledPayload<'a> {
+                note_id: &'a str,
+            }
+            let _ = self.app.emit("timer:cancelled", CancelledPayload { note_id });
         }
     }
 

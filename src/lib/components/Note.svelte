@@ -100,6 +100,13 @@
           timer = { ...timer, state: 'done', remaining_seconds: 0 };
         }
       }),
+      // Backend cancels (Dismiss button, calendar bell toggle, auto-sync
+      // pruning) emit `timer:cancelled` so this window can drop the chime
+      // and the Done UI even when the cancel didn't originate here.
+      await listen<{ note_id: string }>('timer:cancelled', (e) => {
+        if (e.payload.note_id !== noteId) return;
+        timer = null;
+      }),
     );
   });
 
