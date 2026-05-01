@@ -85,15 +85,28 @@ impl WindowManager {
         let win = builder.build()?;
         // The controller can be closed without quitting the app — intercept the
         // close request and hide the window instead.
+        //
+        // We also raise the controller's z-level when it's focused so it can
+        // come above pinned notes (which sit at the floating level via
+        // `always_on_top`). Without this, pinned notes always render on top
+        // of the controller regardless of which window the user clicked,
+        // because macOS resolves window levels before focus order. Toggling
+        // the always-on-top flag on focus/blur lets the focused window win.
         let label = win.label().to_string();
         let app_clone = app.clone();
-        win.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        win.on_window_event(move |event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 if let Some(w) = app_clone.get_webview_window(&label) {
                     let _ = w.hide();
                     api.prevent_close();
                 }
             }
+            tauri::WindowEvent::Focused(focused) => {
+                if let Some(w) = app_clone.get_webview_window(&label) {
+                    let _ = w.set_always_on_top(*focused);
+                }
+            }
+            _ => {}
         });
         Ok(())
     }

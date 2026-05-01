@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-05-01
+
+### Fixed
+
+- Controller window stayed behind pinned notes even when clicked. Pinned
+  notes use `always_on_top` (the macOS floating window level), and the
+  OS resolves levels before focus, so the controller could never come
+  above them. Now the controller toggles its own `always_on_top` on
+  focus/blur — clicking it raises it above any pinned note; clicking a
+  note drops it back so the note can stay on top while in use.
+
 ## [0.1.6] - 2026-04-30
 
 ### Added
