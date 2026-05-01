@@ -28,8 +28,7 @@ const CLIENT_SECRET: Option<&str> = option_env!("POSTIK_GOOGLE_CLIENT_SECRET");
 const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
-const CALENDAR_EVENTS_URL: &str =
-    "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const CALENDAR_EVENTS_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const SCOPES: &str = "https://www.googleapis.com/auth/calendar.readonly \
                       https://www.googleapis.com/auth/userinfo.email";
 
@@ -90,7 +89,10 @@ fn generate_pkce() -> Pkce {
     let mut hasher = Sha256::new();
     hasher.update(verifier.as_bytes());
     let challenge = URL_SAFE_NO_PAD.encode(hasher.finalize());
-    Pkce { verifier, challenge }
+    Pkce {
+        verifier,
+        challenge,
+    }
 }
 
 // ---------------- OAuth flow ----------------
@@ -183,12 +185,11 @@ pub async fn connect(storage: &Storage) -> Result<GoogleAccountInfo, GoogleError
                          <p>Return to Postik and try again.</p>\
                          </body></html>"
                     };
-                    let response = tiny_http::Response::from_string(body)
-                        .with_header(
-                            "Content-Type: text/html; charset=utf-8"
-                                .parse::<tiny_http::Header>()
-                                .unwrap(),
-                        );
+                    let response = tiny_http::Response::from_string(body).with_header(
+                        "Content-Type: text/html; charset=utf-8"
+                            .parse::<tiny_http::Header>()
+                            .unwrap(),
+                    );
                     let _ = req.respond(response);
                     if let Some(c) = code {
                         return Ok(c);
@@ -407,10 +408,12 @@ pub async fn sync(
 ) -> Result<Vec<GoogleEventRecord>, GoogleError> {
     let acc = ensure_fresh_token(storage).await?;
     let (start, end) = range.to_window();
-    let time_min =
-        chrono::DateTime::from_timestamp(start, 0).unwrap_or_default().to_rfc3339();
-    let time_max =
-        chrono::DateTime::from_timestamp(end, 0).unwrap_or_default().to_rfc3339();
+    let time_min = chrono::DateTime::from_timestamp(start, 0)
+        .unwrap_or_default()
+        .to_rfc3339();
+    let time_max = chrono::DateTime::from_timestamp(end, 0)
+        .unwrap_or_default()
+        .to_rfc3339();
 
     let resp: CalendarEventList = reqwest::Client::new()
         .get(CALENDAR_EVENTS_URL)

@@ -516,10 +516,7 @@ impl Storage {
         conn.execute("DELETE FROM google_account WHERE id = 1", [])?;
         // Cascade delete the event-backed notes, which cascades through to
         // their google_events rows via the FK.
-        conn.execute(
-            "DELETE FROM notes WHERE event_id IS NOT NULL",
-            [],
-        )?;
+        conn.execute("DELETE FROM notes WHERE event_id IS NOT NULL", [])?;
         Ok(())
     }
 
