@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-04-30
+
+### Added
+
+- Clock-time input in the Set-timer custom field. Type `14:30`, `@14:30`,
+  `at 14:30`, `2:30pm`, or `9am` to fire the timer at that wall-clock
+  time. If the time has already passed today, the timer rolls to the
+  same time tomorrow. Internally still a countdown — pause/resume shifts
+  the fire time as with any countdown.
+
 ## [0.1.5] - 2026-04-30
 
 ### Fixed

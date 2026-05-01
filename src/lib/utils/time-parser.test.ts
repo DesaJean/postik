@@ -48,6 +48,68 @@ describe('parseTimerInput', () => {
     expect(parseTimerInput('0m')).toBeNull();
     expect(parseTimerInput('0h0m0s')).toBeNull();
   });
+
+  describe('clock-time inputs', () => {
+    // Anchor "now" at 2026-04-30 12:00:00 local time so the math is deterministic.
+    const NOW = new Date(2026, 3, 30, 12, 0, 0);
+
+    it('parses 24h "HH:MM" into a countdown to that time today', () => {
+      const r = parseTimerInput('14:30', NOW);
+      // 14:30 - 12:00 = 2h30m = 9000s
+      expect(r).toEqual({ mode: 'countdown', durationSeconds: 9000, targetTime: '14:30' });
+    });
+
+    it('rolls a past time to the next day', () => {
+      const r = parseTimerInput('09:00', NOW);
+      // 09:00 today already passed at 12:00, fire next day → 21h = 75600s
+      expect(r).toEqual({ mode: 'countdown', durationSeconds: 21 * 3600, targetTime: '09:00' });
+    });
+
+    it('accepts the @ prefix', () => {
+      expect(parseTimerInput('@14:30', NOW)).toEqual({
+        mode: 'countdown',
+        durationSeconds: 9000,
+        targetTime: '14:30',
+      });
+    });
+
+    it('accepts the "at" prefix', () => {
+      expect(parseTimerInput('at 14:30', NOW)).toEqual({
+        mode: 'countdown',
+        durationSeconds: 9000,
+        targetTime: '14:30',
+      });
+    });
+
+    it('parses 12h with am/pm', () => {
+      expect(parseTimerInput('2:30pm', NOW)).toEqual({
+        mode: 'countdown',
+        durationSeconds: 9000,
+        targetTime: '14:30',
+      });
+      expect(parseTimerInput('9am', NOW)).toEqual({
+        mode: 'countdown',
+        durationSeconds: 21 * 3600,
+        targetTime: '09:00',
+      });
+      expect(parseTimerInput('12am', NOW)).toEqual({
+        mode: 'countdown',
+        durationSeconds: 12 * 3600,
+        targetTime: '00:00',
+      });
+      expect(parseTimerInput('12pm', NOW)).toEqual({
+        mode: 'countdown',
+        durationSeconds: 24 * 3600,
+        targetTime: '12:00',
+      });
+    });
+
+    it('rejects out-of-range clock times', () => {
+      expect(parseTimerInput('25:00', NOW)).toBeNull();
+      expect(parseTimerInput('14:60', NOW)).toBeNull();
+      expect(parseTimerInput('13pm', NOW)).toBeNull();
+    });
+  });
 });
 
 describe('formatDuration', () => {

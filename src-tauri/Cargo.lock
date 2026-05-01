@@ -2892,7 +2892,7 @@ dependencies = [
 
 [[package]]
 name = "postik"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "chrono",
  "log",

@@ -119,7 +119,10 @@
   let customPreview = $derived.by(() => {
     if (!customParsed) return null;
     if (customParsed.mode === 'countdown' && customParsed.durationSeconds) {
-      return `Countdown · ${formatDuration(customParsed.durationSeconds)}`;
+      const d = formatDuration(customParsed.durationSeconds);
+      return customParsed.targetTime
+        ? `Countdown · until ${customParsed.targetTime} (in ${d})`
+        : `Countdown · ${d}`;
     }
     if (customParsed.mode === 'pomodoro') return 'Pomodoro · 25 work / 5 break';
     if (customParsed.mode === 'stopwatch') return 'Stopwatch · counts up';
@@ -227,7 +230,7 @@
         <!-- svelte-ignore a11y_autofocus -->
         <input
           type="text"
-          placeholder="25m, 1h30m, 90s, pomo…"
+          placeholder="25m, 1h30m, 14:30, 2:30pm…"
           bind:value={custom}
           autofocus
           aria-label="Custom timer"
@@ -240,7 +243,7 @@
       {:else if custom.trim() !== '' && !customValid}
         <p class="preview invalid" aria-live="polite">Not a valid timer</p>
       {:else}
-        <p class="hint">Examples: 25m, 1h30m, 90s, pomo, stopwatch</p>
+        <p class="hint">Duration (25m · 1h30m · 90s) or clock time (14:30 · 2:30pm)</p>
       {/if}
       {#if error}<p class="error">{error}</p>{/if}
     </div>
