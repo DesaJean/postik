@@ -6,7 +6,7 @@ use crate::storage::{GoogleEventRecord, NoteRecord, PomodoroDayBucket, StackReco
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub fn create_note(
@@ -510,6 +510,137 @@ pub fn import_backup(
     }
     let _ = app.emit("backup:imported", snapshot.notes.len());
     Ok(snapshot.notes.len())
+}
+
+/// Where Postik is currently reading/writing its SQLite file. Used by
+/// Settings → Storage to show the user what's in effect.
+/// Summarize a note's content via the Anthropic API. The user
+/// supplies their own API key in Settings — Postik never ships one.
+/// Uses Haiku for low cost and fast turnaround on short notes.
+#[tauri::command]
+pub async fn summarize_note(
+    content: String,
+    storage: State<'_, Storage>,
+) -> Result<String, String> {
+    let api_key = storage
+        .get_setting("anthropic_api_key")
+        .map_err(|e| e.to_string())?
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "No Anthropic API key configured. Set one in Settings → AI.".to_string())?;
+    if content.trim().is_empty() {
+        return Ok(String::new());
+    }
+    let body = serde_json::json!({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 400,
+        "messages": [
+            {
+                "role": "user",
+                "content": format!(
+                    "Summarize the following sticky note in 1-2 short sentences. Be concise; preserve concrete names, dates, and action items. Output the summary only — no preamble.\n\n---\n{}",
+                    content
+                ),
+            }
+        ],
+    });
+    let resp: serde_json::Value = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    // Successful: { "content": [{"type":"text","text":"…"}], ... }
+    // Error: { "error": {"message":"…"}, ... }
+    if let Some(err) = resp
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
+        return Err(err.to_string());
+    }
+    let summary = resp
+        .get("content")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find_map(|p| p.get("text").and_then(|t| t.as_str()))
+        })
+        .unwrap_or("(no response)")
+        .trim()
+        .to_string();
+    Ok(summary)
+}
+
+/// Apply the sidebar layout to the controller window: a thin column
+/// docked against the right edge of the primary monitor, full
+/// height. Reverts to a normal floating window when `enabled` is
+/// false.
+#[tauri::command]
+pub fn set_sidebar_mode(enabled: bool, app: AppHandle) -> Result<(), String> {
+    let win = app
+        .get_webview_window("controller")
+        .ok_or_else(|| "controller window missing".to_string())?;
+    if enabled {
+        let monitor = win
+            .current_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "no monitor".to_string())?;
+        let width: i32 = 260;
+        let size = monitor.size();
+        let pos = monitor.position();
+        win.set_size(tauri::PhysicalSize::new(width as u32, size.height))
+            .map_err(|e| e.to_string())?;
+        win.set_position(tauri::PhysicalPosition::new(
+            pos.x + size.width as i32 - width,
+            pos.y,
+        ))
+        .map_err(|e| e.to_string())?;
+    } else {
+        win.set_size(tauri::LogicalSize::new(360.0, 480.0))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn current_db_path(app: AppHandle) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let pointer = data_dir.join("db_location.txt");
+    let path = std::fs::read_to_string(&pointer)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| data_dir.join("postik.db").to_string_lossy().to_string());
+    Ok(path)
+}
+
+/// Persist a new DB path. The new path takes effect on next launch —
+/// re-opening SQLite mid-process would orphan every running query.
+/// Pass `None` to clear the override and revert to the default
+/// app_data_dir/postik.db.
+#[tauri::command]
+pub fn set_db_path(path: Option<String>, app: AppHandle) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let pointer = data_dir.join("db_location.txt");
+    match path {
+        Some(p) if !p.trim().is_empty() => {
+            std::fs::write(&pointer, p.trim()).map_err(|e| e.to_string())?;
+        }
+        _ => {
+            let _ = std::fs::remove_file(&pointer);
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

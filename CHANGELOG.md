@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-04-30
+
+### Added — sync, layout, and a sprinkle of AI
+
+- **Custom DB path** (D3). Settings → Storage lets you point Postik at
+  any file path — drop the SQLite DB inside iCloud Drive, Dropbox,
+  Google Drive, or a Syncthing folder for cross-device sync without a
+  backend. Implementation is a `db_location.txt` pointer file next to
+  the default DB; the app reads it on startup. Restart-required after
+  changing the path. **Caveat:** SQLite over a sync filesystem is not
+  multi-writer-safe — close Postik on machine A before opening on
+  machine B, or accept last-writer-wins.
+- **Sidebar mode** (E4). Settings → Layout adds a toggle that pins the
+  controller to a slim right-edge dock (always-on-top, fixed width).
+  Useful for ambient access to the notes list without giving up screen
+  real estate. Toggle off to return to the floating window.
+- **AI summarize** (G1). Per-note ✨ button posts the note content to
+  Anthropic's Messages API (Claude Haiku) and shows a one-paragraph
+  summary. Bring-your-own-key — set `ANTHROPIC_API_KEY` in
+  Settings → AI. Skipped silently when unset. No background calls,
+  no telemetry; the request fires only when you click the button.
+
 ## [0.9.0] - 2026-05-02
 
 ### Added — distraction blocker (lightweight)

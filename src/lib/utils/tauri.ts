@@ -102,6 +102,11 @@ export const tauri = {
   openUrl: (url: string) => invoke<void>('open_url', { url }),
   openUrlForce: (url: string) => invoke<void>('open_url_force', { url }),
 
+  currentDbPath: () => invoke<string>('current_db_path'),
+  setDbPath: (path: string | null) => invoke<void>('set_db_path', { path }),
+  setSidebarMode: (enabled: boolean) => invoke<void>('set_sidebar_mode', { enabled }),
+  summarizeNote: (content: string) => invoke<string>('summarize_note', { content }),
+
   pomodoroStats: () =>
     invoke<{
       today_seconds: number;

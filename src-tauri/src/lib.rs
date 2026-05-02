@@ -92,6 +92,10 @@ pub fn run() {
             commands::list_settings,
             commands::open_url,
             commands::open_url_force,
+            commands::current_db_path,
+            commands::set_db_path,
+            commands::set_sidebar_mode,
+            commands::summarize_note,
             commands::pomodoro_stats,
             commands::list_shortcut_bindings,
             commands::set_shortcut,
@@ -127,9 +131,20 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("could not resolve app_data_dir");
-            let db_path = data_dir.join("postik.db");
+            // Read an optional pointer file `db_location.txt` that the
+            // user can drop next to the default DB to redirect Postik at
+            // a different file (e.g. inside iCloud or Dropbox for
+            // multi-device sync). The pointer file is written by the
+            // Settings → Storage flow, but supporting an external
+            // override means the user can also wire it manually.
+            let pointer = data_dir.join("db_location.txt");
+            let db_path = std::fs::read_to_string(&pointer)
+                .ok()
+                .map(|s| std::path::PathBuf::from(s.trim()))
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or_else(|| data_dir.join("postik.db"));
             let storage =
-                Storage::open(&db_path).expect("failed to open SQLite at app_data_dir/postik.db");
+                Storage::open(&db_path).expect("failed to open SQLite at the configured location");
 
             // Window manager and timer engine share the storage handle.
             let wm = WindowManager::new(storage.clone());

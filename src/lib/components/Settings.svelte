@@ -153,6 +153,47 @@
 
   onMount(loadShortcuts);
 
+  // Storage location (D3). The user can point Postik at a custom DB
+  // path (e.g. inside iCloud / Dropbox for cross-device sync). Takes
+  // effect on next launch.
+  let dbPath = $state<string>('');
+  let dbStatus = $state<string | null>(null);
+  async function loadDbPath() {
+    try {
+      dbPath = await tauri.currentDbPath();
+    } catch (e) {
+      console.error('current_db_path failed', e);
+    }
+  }
+  onMount(loadDbPath);
+
+  async function pickDbPath() {
+    dbStatus = null;
+    try {
+      const picked = await saveDialog({
+        defaultPath: 'postik.db',
+        filters: [{ name: 'SQLite database', extensions: ['db'] }],
+      });
+      if (!picked) return;
+      await tauri.setDbPath(picked);
+      dbPath = picked;
+      dbStatus = 'Saved. Restart Postik for the change to take effect.';
+    } catch (e) {
+      dbStatus = `Failed: ${e}`;
+    }
+  }
+
+  async function resetDbPath() {
+    dbStatus = null;
+    try {
+      await tauri.setDbPath(null);
+      dbPath = await tauri.currentDbPath();
+      dbStatus = 'Reverted to default. Restart Postik for the change to take effect.';
+    } catch (e) {
+      dbStatus = `Failed: ${e}`;
+    }
+  }
+
   // Backup export / import. The user picks a path; we forward to Rust.
   let backupStatus = $state<string | null>(null);
 
@@ -389,6 +430,74 @@
             settingsStore.setFocusBlockedHosts((e.currentTarget as HTMLTextAreaElement).value)}
           aria-label="Blocked hosts"
         ></textarea>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-heading">Layout</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Sidebar mode</div>
+          <div class="row-helper">
+            Dock the controller as a thin column against the right edge of your screen. Notes still
+            float as separate windows. Toggle off to revert to the default floating-controller
+            layout.
+          </div>
+        </div>
+        <Switch
+          checked={settingsStore.sidebarMode}
+          onChange={(v) => settingsStore.setSidebarMode(v)}
+          label="Sidebar mode"
+        />
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-heading">AI</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Anthropic API key</div>
+          <div class="row-helper">
+            Powers the per-note "Summarize" button. Get a key at console.anthropic.com. Stored
+            locally, never sent anywhere except api.anthropic.com.
+          </div>
+        </div>
+      </div>
+      <div class="row" style="padding-top: 0">
+        <input
+          type="password"
+          class="hosts-area"
+          style="min-height: 32px; font-family: ui-monospace, monospace"
+          placeholder="sk-ant-..."
+          value={settingsStore.anthropicApiKey}
+          oninput={(e) =>
+            settingsStore.setAnthropicApiKey((e.currentTarget as HTMLInputElement).value)}
+          aria-label="Anthropic API key"
+        />
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-heading">Storage</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Database location</div>
+          <div class="row-helper">
+            Pointing this at an iCloud / Dropbox folder gives you cross-device sync without a
+            backend. Caveats: SQLite over network filesystems is fragile — keep one device writing
+            at a time, expect possible conflicts. Restart Postik for changes to take effect.
+          </div>
+        </div>
+      </div>
+      <div class="row" style="padding-top: 0; flex-direction: column; align-items: stretch">
+        <code class="db-path">{dbPath || 'Loading…'}</code>
+        <div style="display: flex; gap: 6px">
+          <button class="update-btn" onclick={pickDbPath}>Choose path…</button>
+          <button class="update-btn" onclick={resetDbPath}>Reset to default</button>
+        </div>
+        {#if dbStatus}
+          <p class="row-helper" style="padding: 0; margin-top: 6px">{dbStatus}</p>
+        {/if}
       </div>
     </section>
 
@@ -732,6 +841,16 @@
     outline: none;
     border-color: rgba(216, 90, 48, 0.4);
     background: rgba(0, 0, 0, 0.01);
+  }
+  .db-path {
+    display: block;
+    margin: 0 16px 8px;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10px;
+    word-break: break-all;
   }
 
   .update-btn {

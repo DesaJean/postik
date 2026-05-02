@@ -262,6 +262,25 @@
     await tauri.updateNoteTags(noteId, joined === '' ? null : joined);
   }
 
+  // AI summarize: posts content to Anthropic via the backend, shows
+  // the summary in an alert (simplest UX for v1). Skipped silently
+  // when the user hasn't set an API key.
+  let summarizing = $state(false);
+  async function summarize() {
+    if (summarizing) return;
+    summarizing = true;
+    try {
+      const summary = await tauri.summarizeNote(content);
+      if (summary) {
+        alert(`Summary:\n\n${summary}`);
+      }
+    } catch (e) {
+      alert(`Summarize failed: ${e}`);
+    } finally {
+      summarizing = false;
+    }
+  }
+
   async function changeRecurring(rule: RecurringRule | null) {
     recurringRule = rule;
     await tauri.updateNoteRecurringRule(noteId, rule ? JSON.stringify(rule) : null);
@@ -450,6 +469,17 @@
       <Timer {noteId} {timer} {flashing} onChange={refreshTimer} />
     </div>
     <div class="micro-controls">
+      {#if !isEvent && content.trim().length > 0 && settingsStore.anthropicApiKey}
+        <button
+          class="ai-btn"
+          onclick={summarize}
+          disabled={summarizing}
+          title="Summarize this note (AI)"
+          aria-label="Summarize"
+        >
+          {summarizing ? '…' : '✨'}
+        </button>
+      {/if}
       <AppearancePopover
         {colorId}
         {opacity}
@@ -602,5 +632,26 @@
     gap: 4px;
     padding: 0 8px;
     flex-shrink: 0;
+  }
+  .ai-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    color: currentColor;
+    opacity: 0.55;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    transition:
+      opacity 120ms ease-out,
+      background-color 120ms ease-out;
+  }
+  .ai-btn:hover:not(:disabled) {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
+  }
+  .ai-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 </style>

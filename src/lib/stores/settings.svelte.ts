@@ -14,6 +14,8 @@ export const SETTING_KEYS = {
   googleCalendarAutoSync: 'google_calendar_auto_sync',
   pomodoroAutoStart: 'pomodoro_auto_start',
   focusBlockedHosts: 'focus_blocked_hosts',
+  sidebarMode: 'sidebar_mode',
+  anthropicApiKey: 'anthropic_api_key',
 } as const;
 
 const DEFAULTS = {
@@ -28,6 +30,8 @@ const DEFAULTS = {
   googleCalendarAutoSync: false,
   pomodoroAutoStart: true,
   focusBlockedHosts: '' as string,
+  sidebarMode: false,
+  anthropicApiKey: '' as string,
 } as const;
 
 interface ChangedPayload {
@@ -49,6 +53,8 @@ class SettingsStore {
   googleCalendarAutoSync = $state<boolean>(DEFAULTS.googleCalendarAutoSync);
   pomodoroAutoStart = $state<boolean>(DEFAULTS.pomodoroAutoStart);
   focusBlockedHosts = $state<string>(DEFAULTS.focusBlockedHosts);
+  sidebarMode = $state<boolean>(DEFAULTS.sidebarMode);
+  anthropicApiKey = $state<string>(DEFAULTS.anthropicApiKey);
   loaded = $state(false);
 
   private unlisten: UnlistenFn | null = null;
@@ -78,6 +84,8 @@ class SettingsStore {
       );
       this.focusBlockedHosts =
         map.get(SETTING_KEYS.focusBlockedHosts) ?? DEFAULTS.focusBlockedHosts;
+      this.sidebarMode = bool(map.get(SETTING_KEYS.sidebarMode), DEFAULTS.sidebarMode);
+      this.anthropicApiKey = map.get(SETTING_KEYS.anthropicApiKey) ?? DEFAULTS.anthropicApiKey;
       this.loaded = true;
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -145,6 +153,18 @@ class SettingsStore {
     await tauri.setSetting(SETTING_KEYS.focusBlockedHosts, value);
   }
 
+  async setSidebarMode(value: boolean) {
+    this.sidebarMode = value;
+    await tauri.setSetting(SETTING_KEYS.sidebarMode, String(value));
+    // Apply the layout immediately so the user sees the change.
+    await tauri.setSidebarMode(value);
+  }
+
+  async setAnthropicApiKey(value: string) {
+    this.anthropicApiKey = value;
+    await tauri.setSetting(SETTING_KEYS.anthropicApiKey, value);
+  }
+
   private applyRemote(key: string, value: string) {
     if (key === SETTING_KEYS.privacyHideFromCapture) {
       this.privacyHideFromCapture = value === 'true';
@@ -168,6 +188,10 @@ class SettingsStore {
       this.pomodoroAutoStart = value === 'true';
     } else if (key === SETTING_KEYS.focusBlockedHosts) {
       this.focusBlockedHosts = value;
+    } else if (key === SETTING_KEYS.sidebarMode) {
+      this.sidebarMode = value === 'true';
+    } else if (key === SETTING_KEYS.anthropicApiKey) {
+      this.anthropicApiKey = value;
     }
   }
 }
