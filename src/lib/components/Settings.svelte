@@ -2,6 +2,7 @@
   import Switch from './Switch.svelte';
   import { settingsStore } from '../stores/settings.svelte';
   import { SOUND_CHOICES, playTimerDone, type SoundChoice } from '../utils/sound';
+  import { checkForUpdate, downloadAndInstall, restart, type UpdateStatus } from '../utils/updater';
 
   interface Props {
     onBack: () => void;
@@ -14,6 +15,39 @@
     // Preview the chosen variant immediately so the user hears what they
     // picked without setting up a real timer.
     playTimerDone(id);
+  }
+
+  // Update flow: idle → checking → up-to-date | available → downloading
+  // → ready → (user clicks Restart). Errors land in `error` regardless of
+  // the prior state.
+  let updateStatus = $state<UpdateStatus>({ kind: 'idle' });
+
+  async function onCheckUpdate() {
+    updateStatus = { kind: 'checking' };
+    try {
+      const update = await checkForUpdate();
+      if (!update) {
+        updateStatus = { kind: 'up-to-date' };
+        return;
+      }
+      updateStatus = {
+        kind: 'available',
+        version: update.version,
+        notes: update.body ?? null,
+      };
+      // Download and install in the background; restart is user-initiated.
+      updateStatus = { kind: 'downloading', downloaded: 0, total: null };
+      await downloadAndInstall(update, (downloaded, total) => {
+        updateStatus = { kind: 'downloading', downloaded, total };
+      });
+      updateStatus = { kind: 'ready' };
+    } catch (e) {
+      updateStatus = { kind: 'error', message: String(e) };
+    }
+  }
+
+  async function onRestart() {
+    await restart();
   }
 </script>
 
@@ -98,9 +132,46 @@
       {/if}
     </section>
 
-    <p class="footer-note">
-      More settings — sound choice, default color, custom shortcuts — in v0.2.
-    </p>
+    <section>
+      <h2 class="section-heading">Updates</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Check for updates</div>
+          <div class="row-helper">
+            Postik checks GitHub releases for a newer version. The download is signed; if
+            verification fails, the install is rejected.
+          </div>
+        </div>
+        {#if updateStatus.kind === 'idle' || updateStatus.kind === 'up-to-date' || updateStatus.kind === 'error'}
+          <button class="update-btn" onclick={onCheckUpdate}>Check now</button>
+        {:else if updateStatus.kind === 'checking'}
+          <button class="update-btn" disabled>Checking…</button>
+        {:else if updateStatus.kind === 'downloading'}
+          <button class="update-btn" disabled>
+            {updateStatus.total
+              ? `${Math.round((updateStatus.downloaded / updateStatus.total) * 100)}%`
+              : '…'}
+          </button>
+        {:else if updateStatus.kind === 'ready'}
+          <button class="update-btn ready" onclick={onRestart}>Restart</button>
+        {/if}
+      </div>
+      {#if updateStatus.kind === 'up-to-date'}
+        <p class="row-helper" style="padding: 0 16px 12px">You're on the latest version.</p>
+      {:else if updateStatus.kind === 'available'}
+        <p class="row-helper" style="padding: 0 16px 12px">
+          v{updateStatus.version} is available — downloading.
+        </p>
+      {:else if updateStatus.kind === 'ready'}
+        <p class="row-helper" style="padding: 0 16px 12px">
+          Update downloaded. Click Restart to apply.
+        </p>
+      {:else if updateStatus.kind === 'error'}
+        <p class="row-helper" style="padding: 0 16px 12px; color: var(--accent)">
+          {updateStatus.message}
+        </p>
+      {/if}
+    </section>
   </div>
 </div>
 
@@ -259,11 +330,33 @@
   .sound-helper {
     margin-top: 8px;
   }
-  .footer-note {
+  .update-btn {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.05);
     font-size: 11px;
-    color: var(--text-muted);
-    text-align: center;
-    margin: 24px 16px 16px;
+    font-weight: 500;
+    color: inherit;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .update-btn:hover:not(:disabled) {
+    background: rgba(216, 90, 48, 0.12);
+    color: var(--accent);
+  }
+  .update-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .update-btn.ready {
+    background: var(--accent);
+    color: white;
+  }
+  .update-btn.ready:hover {
+    background: #c64f29;
   }
 
   @media (prefers-color-scheme: dark) {

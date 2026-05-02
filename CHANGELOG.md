@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-01
+
+### Added
+
+- **Auto-update via the Tauri updater plugin.** Settings → Updates → "Check
+  now" pings GitHub releases for a newer version. If signed verification
+  succeeds, the bundle downloads in the background and a "Restart" button
+  appears. The verification public key is baked into `tauri.conf.json`;
+  every release is signed in CI from the matching private key (stored as
+  GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` /
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`).
+- The release workflow now produces a `latest.json` manifest at the root
+  of each release (the updater endpoint Postik queries).
+
+### Notes
+
+- v0.2.1 is the cut-over: existing users still need to manually install
+  this version. Every subsequent tag from now on is auto-deliverable.
+
 ## [0.2.0] - 2026-05-01
 
 ### Added

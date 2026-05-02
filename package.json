@@ -1,7 +1,7 @@
 {
   "name": "postik",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Floating sticky notes with per-window timers",
   "type": "module",
   "scripts": {
@@ -40,6 +40,8 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
-    "@tauri-apps/plugin-notification": "^2.3.3"
+    "@tauri-apps/plugin-notification": "^2.3.3",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1"
   }
 }

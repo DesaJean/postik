@@ -1,6 +1,6 @@
 [package]
 name = "postik"
-version = "0.2.0"
+version = "0.2.1"
 description = "Floating sticky notes with per-window timers, colors, and always-on-top control"
 authors = ["Postik Contributors"]
 license = "MIT"
@@ -24,6 +24,8 @@ tauri-plugin-log = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

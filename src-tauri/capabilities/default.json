@@ -24,6 +24,9 @@
     "notification:allow-request-permission",
     "dialog:default",
     "dialog:allow-confirm",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

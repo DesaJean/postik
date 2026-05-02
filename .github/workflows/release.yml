@@ -46,6 +46,13 @@ jobs:
           # falls back to a "Setup needed" empty state.
           POSTIK_GOOGLE_CLIENT_ID: ${{ secrets.POSTIK_GOOGLE_CLIENT_ID }}
           POSTIK_GOOGLE_CLIENT_SECRET: ${{ secrets.POSTIK_GOOGLE_CLIENT_SECRET }}
+          # Updater signing. The private key (and optional password) are
+          # GitHub Actions secrets; tauri-action consumes them to sign the
+          # produced .dmg / .msi artifacts. The public counterpart is
+          # baked into tauri.conf.json so the running app can verify
+          # update bundles before installing them.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Postik ${{ github.ref_name }}'
