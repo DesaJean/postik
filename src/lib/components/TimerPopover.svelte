@@ -7,12 +7,13 @@
 
   interface Props {
     noteId: string;
+    noteContent?: string;
     open: boolean;
     onClose: () => void;
     onStarted: () => void | Promise<void>;
   }
 
-  let { noteId, open, onClose, onStarted }: Props = $props();
+  let { noteId, noteContent = '', open, onClose, onStarted }: Props = $props();
 
   let custom = $state('');
   let error = $state<string | null>(null);
@@ -198,6 +199,28 @@
     e.preventDefault();
     void startCustom();
   }
+
+  // G3 — ask Claude to suggest a duration based on the note content.
+  // Only meaningful when the user has set their API key and the note
+  // has some content to read; otherwise the button is hidden.
+  let suggesting = $state(false);
+  let canSuggest = $derived(
+    noteContent.trim().length >= 8 && (settingsStore.anthropicApiKey?.length ?? 0) > 0,
+  );
+  async function suggestDuration() {
+    if (suggesting) return;
+    suggesting = true;
+    error = null;
+    try {
+      const seconds = await tauri.suggestTimerDuration(noteContent);
+      const minutes = Math.round(seconds / 60);
+      custom = `${minutes}m`;
+    } catch (e) {
+      error = `Suggestion failed: ${e}`;
+    } finally {
+      suggesting = false;
+    }
+  }
 </script>
 
 <svelte:window onmousedown={onWindowMouseDown} onkeydown={onWindowKeyDown} />
@@ -229,7 +252,20 @@
     <div class="divider" aria-hidden="true"></div>
 
     <div class="section">
-      <div class="section-heading">Custom</div>
+      <div class="section-heading">
+        Custom
+        {#if canSuggest}
+          <button
+            type="button"
+            class="suggest-btn"
+            onclick={suggestDuration}
+            disabled={suggesting}
+            title="Suggest a duration with AI"
+          >
+            {suggesting ? '…' : '✨ Suggest'}
+          </button>
+        {/if}
+      </div>
       <form class="custom-form" onsubmit={onSubmit}>
         <!-- svelte-ignore a11y_autofocus -->
         <input
@@ -353,11 +389,34 @@
     gap: 8px;
   }
   .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: rgba(0, 0, 0, 0.45);
+  }
+  .suggest-btn {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--accent);
+    background: rgba(216, 90, 48, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 120ms ease-out;
+  }
+  .suggest-btn:hover {
+    background: rgba(216, 90, 48, 0.2);
+  }
+  .suggest-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   .divider {
     height: 1px;

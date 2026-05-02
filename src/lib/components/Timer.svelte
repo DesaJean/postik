@@ -6,12 +6,13 @@
 
   interface Props {
     noteId: string;
+    noteContent?: string;
     timer: TimerStatePayload | null;
     flashing: boolean;
     onChange: () => void | Promise<void>;
   }
 
-  let { noteId, timer, flashing, onChange }: Props = $props();
+  let { noteId, noteContent = '', timer, flashing, onChange }: Props = $props();
 
   let popoverOpen = $state(false);
 
@@ -99,6 +100,7 @@
     </button>
     <TimerPopover
       {noteId}
+      {noteContent}
       open={popoverOpen}
       onClose={() => (popoverOpen = false)}
       onStarted={onChange}

@@ -466,7 +466,7 @@
 
   <div class="bottom-bar">
     <div class="timer-wrap">
-      <Timer {noteId} {timer} {flashing} onChange={refreshTimer} />
+      <Timer {noteId} noteContent={content} {timer} {flashing} onChange={refreshTimer} />
     </div>
     <div class="micro-controls">
       {#if !isEvent && content.trim().length > 0 && settingsStore.anthropicApiKey}

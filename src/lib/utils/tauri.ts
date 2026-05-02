@@ -106,6 +106,14 @@ export const tauri = {
   setDbPath: (path: string | null) => invoke<void>('set_db_path', { path }),
   setSidebarMode: (enabled: boolean) => invoke<void>('set_sidebar_mode', { enabled }),
   summarizeNote: (content: string) => invoke<string>('summarize_note', { content }),
+  aiOrganizeNotes: () =>
+    invoke<Array<{ note_id: string; tags: string | null; stack_id: string | null }>>(
+      'ai_organize_notes',
+    ),
+  applyOrganizeSuggestions: (
+    suggestions: Array<{ note_id: string; tags: string | null; stack_id: string | null }>,
+  ) => invoke<number>('apply_organize_suggestions', { suggestions }),
+  suggestTimerDuration: (content: string) => invoke<number>('suggest_timer_duration', { content }),
 
   pomodoroStats: () =>
     invoke<{

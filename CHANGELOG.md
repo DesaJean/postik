@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-30
+
+### Added — the rest of the AI menu
+
+- **AI organize notes** (G2). Settings → AI gains an "Organize" button.
+  Claude reads every note's content + the current stack list and
+  proposes 1–3 lowercase tags per note plus an optional stack
+  assignment. A confirm dialog reports `N notes will be tagged, M
+  will be assigned` before any write — never silent. Useful once
+  you have 20+ notes.
+- **Smart timer suggestions** (G3). The timer popover's Custom section
+  shows a `✨ Suggest` button when the API key is set and the note
+  has content. Clicking it asks Claude for a duration and pre-fills
+  the input (e.g. `45m`). Falls back to 25m and clamps to 5–120min
+  on bad responses.
+
+### Notes
+
+- This finishes the AI track from the v0.x roadmap. All Anthropic
+  calls remain bring-your-own-key, manual-trigger only, with no
+  background polling.
+
 ## [0.10.0] - 2026-04-30
 
 ### Added — sync, layout, and a sprinkle of AI

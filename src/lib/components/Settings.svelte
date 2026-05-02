@@ -213,6 +213,43 @@
     }
   }
 
+  // AI organize: ask Claude to suggest tags + stack for every note,
+  // show the count in a confirm dialog, apply on accept. The
+  // suggestions are inspected by the user via the count + sample,
+  // not blindly written — the prompt is intentionally narrow so
+  // surprises are rare.
+  let organizing = $state(false);
+  let organizeStatus = $state<string | null>(null);
+  async function onOrganizeNotes() {
+    if (organizing) return;
+    organizing = true;
+    organizeStatus = null;
+    try {
+      const suggestions = await tauri.aiOrganizeNotes();
+      if (suggestions.length === 0) {
+        organizeStatus = 'No suggestions returned.';
+        return;
+      }
+      const tagged = suggestions.filter((s) => s.tags).length;
+      const stacked = suggestions.filter((s) => s.stack_id).length;
+      const ok = await confirm(
+        `Apply AI suggestions to ${suggestions.length} notes?\n• ${tagged} will get tags\n• ${stacked} will be assigned to a stack\n\nThis overwrites existing tags / stack assignment for those notes.`,
+        { title: 'Organize notes', kind: 'info' },
+      );
+      if (!ok) {
+        organizeStatus = 'Cancelled.';
+        return;
+      }
+      const applied = await tauri.applyOrganizeSuggestions(suggestions);
+      organizeStatus = `Applied to ${applied} notes.`;
+      await notesStore.load();
+    } catch (e) {
+      organizeStatus = `Organize failed: ${e}`;
+    } finally {
+      organizing = false;
+    }
+  }
+
   async function onImportBackup() {
     backupStatus = null;
     const ok = await confirm(
@@ -475,6 +512,23 @@
           aria-label="Anthropic API key"
         />
       </div>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Organize my notes</div>
+          <div class="row-helper">
+            One-shot: Claude reads your notes and suggests tags + stack assignments. You confirm
+            before anything is written. Useful once you have 20+ notes.
+          </div>
+        </div>
+        <button class="update-btn" onclick={onOrganizeNotes} disabled={organizing}>
+          {organizing ? 'Organizing…' : 'Organize'}
+        </button>
+      </div>
+      {#if organizeStatus}
+        <div class="row" style="padding-top: 0">
+          <p class="row-helper" style="padding: 0">{organizeStatus}</p>
+        </div>
+      {/if}
     </section>
 
     <section>

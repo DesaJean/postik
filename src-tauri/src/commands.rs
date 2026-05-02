@@ -580,6 +580,204 @@ pub async fn summarize_note(
     Ok(summary)
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct OrganizeSuggestion {
+    pub note_id: String,
+    pub tags: Option<String>,
+    pub stack_id: Option<String>,
+}
+
+/// Ask Claude to read short content snippets for each note and propose
+/// `tags` (comma-separated) and an optional `stack_id` chosen from the
+/// supplied stack list. The frontend shows the suggestions for review
+/// before applying — Postik never writes back without an explicit
+/// confirm. The model only sees content + stack metadata; nothing
+/// leaves Postik unless the user has set their API key.
+#[tauri::command]
+pub async fn ai_organize_notes(
+    storage: State<'_, Storage>,
+) -> Result<Vec<OrganizeSuggestion>, String> {
+    let api_key = storage
+        .get_setting("anthropic_api_key")
+        .map_err(|e| e.to_string())?
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "No Anthropic API key configured. Set one in Settings → AI.".to_string())?;
+
+    let notes = storage.list_notes().map_err(|e| e.to_string())?;
+    let stacks = storage.list_stacks().map_err(|e| e.to_string())?;
+    let notes_payload: Vec<_> = notes
+        .iter()
+        .filter(|n| !n.content.trim().is_empty())
+        .map(|n| {
+            // Cap each note's content sent to the model — long notes
+            // bloat tokens and hurt suggestion quality.
+            let snippet: String = n.content.chars().take(400).collect();
+            serde_json::json!({ "id": n.id, "content": snippet })
+        })
+        .collect();
+    if notes_payload.is_empty() {
+        return Ok(vec![]);
+    }
+    let stacks_payload: Vec<_> = stacks
+        .iter()
+        .map(|s| serde_json::json!({ "id": s.id, "name": s.name }))
+        .collect();
+
+    let prompt = format!(
+        "You are organizing a user's sticky notes. For each note, propose 1–3 short lowercase tags (comma-separated, no '#') and optionally assign one of the existing stacks (by id). Skip a stack if none fit.\n\nReturn ONLY valid JSON of the shape: [{{\"note_id\":\"...\",\"tags\":\"a, b\",\"stack_id\":\"... or null\"}}]. No markdown, no explanation.\n\nStacks: {}\n\nNotes: {}",
+        serde_json::to_string(&stacks_payload).unwrap_or_default(),
+        serde_json::to_string(&notes_payload).unwrap_or_default(),
+    );
+
+    let body = serde_json::json!({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 2000,
+        "messages": [{ "role": "user", "content": prompt }],
+    });
+    let resp: serde_json::Value = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+        .map_err(|e| e.to_string())?
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(err) = resp
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
+        return Err(err.to_string());
+    }
+    let text = resp
+        .get("content")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find_map(|p| p.get("text").and_then(|t| t.as_str()))
+        })
+        .unwrap_or("[]")
+        .trim()
+        .to_string();
+
+    // The model occasionally wraps JSON in ```json fences despite our
+    // instructions — strip them tolerantly before parsing.
+    let cleaned = text
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+    let parsed: Vec<OrganizeSuggestion> = serde_json::from_str(cleaned).map_err(|e| {
+        format!(
+            "AI returned non-JSON output ({}). Raw response: {}",
+            e, cleaned
+        )
+    })?;
+    Ok(parsed)
+}
+
+/// Bulk-apply organize suggestions: writes each suggestion's tags and
+/// stack assignment for the matching note in a single call. Returns
+/// the count actually applied so the frontend can display feedback.
+#[tauri::command]
+pub fn apply_organize_suggestions(
+    suggestions: Vec<OrganizeSuggestion>,
+    storage: State<Storage>,
+) -> Result<usize, String> {
+    let mut count = 0;
+    for s in suggestions {
+        if let Some(tags) = &s.tags {
+            storage
+                .update_tags(&s.note_id, Some(tags))
+                .map_err(|e| e.to_string())?;
+        }
+        if let Some(stack_id) = &s.stack_id {
+            storage
+                .set_note_stack(&s.note_id, Some(stack_id))
+                .map_err(|e| e.to_string())?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+/// Suggest a timer duration (in seconds) for a note based on its
+/// content. Lightweight prompt that returns just an integer; the
+/// frontend pre-fills the duration field with the result. Skipped
+/// silently when no API key is set or the content is trivial.
+#[tauri::command]
+pub async fn suggest_timer_duration(
+    content: String,
+    storage: State<'_, Storage>,
+) -> Result<u32, String> {
+    let api_key = storage
+        .get_setting("anthropic_api_key")
+        .map_err(|e| e.to_string())?
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "No Anthropic API key configured. Set one in Settings → AI.".to_string())?;
+    if content.trim().len() < 8 {
+        // Too thin to suggest meaningfully; default to 25min pomodoro.
+        return Ok(25 * 60);
+    }
+    let prompt = format!(
+        "A user is about to start a focus timer for the task below. Suggest a duration in MINUTES. Reply with ONLY a single integer between 5 and 120. No words, no units, no punctuation.\n\nTask:\n{}",
+        content.chars().take(500).collect::<String>()
+    );
+    let body = serde_json::json!({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 10,
+        "messages": [{ "role": "user", "content": prompt }],
+    });
+    let resp: serde_json::Value = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(err) = resp
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
+        return Err(err.to_string());
+    }
+    let text = resp
+        .get("content")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find_map(|p| p.get("text").and_then(|t| t.as_str()))
+        })
+        .unwrap_or("25")
+        .trim()
+        .to_string();
+    let minutes: u32 = text
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .unwrap_or(25);
+    let clamped = minutes.clamp(5, 120);
+    Ok(clamped * 60)
+}
+
 /// Apply the sidebar layout to the controller window: a thin column
 /// docked against the right edge of the primary monitor, full
 /// height. Reverts to a normal floating window when `enabled` is
