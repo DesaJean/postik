@@ -284,7 +284,9 @@ impl TimerEngine {
             struct CancelledPayload<'a> {
                 note_id: &'a str,
             }
-            let _ = self.app.emit("timer:cancelled", CancelledPayload { note_id });
+            let _ = self
+                .app
+                .emit("timer:cancelled", CancelledPayload { note_id });
         }
     }
 
