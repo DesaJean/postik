@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-02
+
+### Added — integrations (part 2 of 3)
+
+- **Google Tasks read-only sync** (F2). Calendar tab → "Sync Google
+  Tasks → Note" pulls every task list and renders it into a single
+  auto-managed note as markdown checkboxes (one heading per list,
+  `- [ ]` / `- [x]` per task). Re-syncing re-uses the same note —
+  the id is remembered in settings. Adds `tasks.readonly` to the
+  OAuth scope; users will need to re-grant consent on first sync.
+
+### Notes
+
+- F1 (Outlook) ships next as v0.7.2.
+- The synced note is editable locally — but your edits get overwritten
+  on the next sync. Use it as a read-only mirror for now.
+
 ## [0.7.0] - 2026-05-02
 
 ### Added — integrations (part 1 of 3)

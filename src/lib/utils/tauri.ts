@@ -128,4 +128,5 @@ export const tauri = {
   googleSetEventTimer: (eventId: string, armed: boolean, offsetSeconds: number) =>
     invoke<void>('google_set_event_timer', { eventId, armed, offsetSeconds }),
   googleOpenEvent: (eventId: string) => invoke<void>('google_open_event', { eventId }),
+  googleSyncTasks: () => invoke<string>('google_sync_tasks'),
 };

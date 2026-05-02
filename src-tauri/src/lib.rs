@@ -99,6 +99,7 @@ pub fn run() {
             commands::google_list_events,
             commands::google_set_event_timer,
             commands::google_open_event,
+            commands::google_sync_tasks,
         ])
         .setup(|app| {
             // On macOS, hide Postik from the dock and Cmd-Tab. The user accesses

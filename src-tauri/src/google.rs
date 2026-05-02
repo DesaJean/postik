@@ -30,7 +30,10 @@ const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v2/userinfo";
 const CALENDAR_EVENTS_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const SCOPES: &str = "https://www.googleapis.com/auth/calendar.readonly \
+                      https://www.googleapis.com/auth/tasks.readonly \
                       https://www.googleapis.com/auth/userinfo.email";
+
+const TASKLISTS_URL: &str = "https://tasks.googleapis.com/tasks/v1/users/@me/lists";
 
 #[derive(Debug, thiserror::Error)]
 pub enum GoogleError {
@@ -506,6 +509,127 @@ pub fn schedule_event_timer(engine: &TimerEngine, ev: &GoogleEventRecord, now: i
         PostAction::default(),
         None,
     );
+}
+
+// ---------------- Tasks ----------------
+
+#[derive(Debug, Deserialize)]
+struct TaskListResponse {
+    items: Option<Vec<TaskList>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskList {
+    id: String,
+    title: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TasksResponse {
+    items: Option<Vec<Task>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Task {
+    title: Option<String>,
+    status: Option<String>,
+    #[serde(default)]
+    notes: Option<String>,
+}
+
+/// Fetch every task list and its tasks. Returns a list of (list_title,
+/// items). Errors fall through; the caller decides whether to surface
+/// or swallow.
+async fn fetch_all_tasks(storage: &Storage) -> Result<Vec<(String, Vec<Task>)>, GoogleError> {
+    let acc = ensure_fresh_token(storage).await?;
+    let lists: TaskListResponse = reqwest::Client::new()
+        .get(TASKLISTS_URL)
+        .bearer_auth(&acc.access_token)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    let lists = lists.items.unwrap_or_default();
+    let mut out = Vec::with_capacity(lists.len());
+    for list in lists {
+        let url = format!(
+            "https://tasks.googleapis.com/tasks/v1/lists/{}/tasks?showCompleted=true&showHidden=false",
+            list.id
+        );
+        let resp: TasksResponse = reqwest::Client::new()
+            .get(&url)
+            .bearer_auth(&acc.access_token)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        out.push((list.title, resp.items.unwrap_or_default()));
+    }
+    Ok(out)
+}
+
+/// Render every task list as a single note's content in markdown
+/// (heading per list, `- [ ]` per task). Returns the rendered string.
+fn render_tasks_markdown(lists: &[(String, Vec<Task>)]) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    let _ = writeln!(out, "# Google Tasks");
+    let _ = writeln!(out, "_Synced {now}_");
+    let _ = writeln!(out);
+    for (title, tasks) in lists {
+        let _ = writeln!(out, "## {title}");
+        if tasks.is_empty() {
+            let _ = writeln!(out, "_(empty)_");
+            let _ = writeln!(out);
+            continue;
+        }
+        for task in tasks {
+            let title = task.title.as_deref().unwrap_or("(untitled)");
+            let checked = task.status.as_deref() == Some("completed");
+            let mark = if checked { "[x]" } else { "[ ]" };
+            let _ = writeln!(out, "- {mark} {title}");
+            if let Some(notes) = task.notes.as_deref().filter(|s| !s.is_empty()) {
+                for line in notes.lines() {
+                    let _ = writeln!(out, "  > {line}");
+                }
+            }
+        }
+        let _ = writeln!(out);
+    }
+    out
+}
+
+/// Find or create the special "Google Tasks" note (identified by the
+/// `tasks_note_id` setting), update its content from a fresh sync, and
+/// return its id.
+pub async fn sync_tasks(storage: &Storage) -> Result<String, GoogleError> {
+    let lists = fetch_all_tasks(storage).await?;
+    let body = render_tasks_markdown(&lists);
+
+    // Find the existing tasks-note id, if any.
+    let stored_id = storage
+        .get_setting("google_tasks_note_id")
+        .ok()
+        .flatten()
+        .filter(|s| !s.is_empty());
+    let note_id = match stored_id {
+        Some(id) if storage.get_note(&id)?.is_some() => id,
+        _ => {
+            // Create a fresh note and remember its id.
+            let note = storage
+                .create_note(160.0, 160.0, 320.0, 360.0)
+                .map_err(GoogleError::from)?;
+            let _ = storage.set_setting("google_tasks_note_id", &note.id);
+            note.id
+        }
+    };
+    storage
+        .update_content(&note_id, &body)
+        .map_err(GoogleError::from)?;
+    Ok(note_id)
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 [package]
 name = "postik"
-version = "0.7.0"
+version = "0.7.1"
 description = "Floating sticky notes with per-window timers, colors, and always-on-top control"
 authors = ["Postik Contributors"]
 license = "MIT"

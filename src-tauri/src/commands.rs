@@ -508,6 +508,18 @@ pub fn google_set_event_timer(
 }
 
 #[tauri::command]
+pub async fn google_sync_tasks(
+    app: AppHandle,
+    storage: State<'_, Storage>,
+) -> Result<String, String> {
+    let note_id = google::sync_tasks(&storage)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("google:tasks-synced", &note_id);
+    Ok(note_id)
+}
+
+#[tauri::command]
 pub fn google_open_event(
     event_id: String,
     app: AppHandle,

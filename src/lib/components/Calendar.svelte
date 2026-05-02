@@ -2,8 +2,27 @@
   import { onMount } from 'svelte';
   import { calendarStore } from '../stores/calendar.svelte';
   import { settingsStore } from '../stores/settings.svelte';
+  import { notesStore } from '../stores/notes.svelte';
+  import { tauri } from '../utils/tauri';
   import Switch from './Switch.svelte';
   import type { SyncRangeKind } from '../types';
+
+  let tasksLoading = $state(false);
+  let tasksError = $state<string | null>(null);
+
+  async function syncTasks() {
+    tasksLoading = true;
+    tasksError = null;
+    try {
+      const noteId = await tauri.googleSyncTasks();
+      await notesStore.load();
+      await tauri.focusNote(noteId);
+    } catch (e) {
+      tasksError = String(e);
+    } finally {
+      tasksLoading = false;
+    }
+  }
 
   onMount(() => {
     calendarStore.load();
@@ -88,6 +107,15 @@
         onChange={(v) => settingsStore.setGoogleCalendarAutoSync(v)}
         label="Auto-sync"
       />
+    </div>
+
+    <div class="tasks-row">
+      <button class="tasks-btn" onclick={syncTasks} disabled={tasksLoading}>
+        {tasksLoading ? 'Syncing tasks…' : 'Sync Google Tasks → Note'}
+      </button>
+      {#if tasksError}
+        <p class="error">{tasksError}</p>
+      {/if}
     </div>
 
     <div class="ranges">
@@ -244,6 +272,30 @@
   .auto-sync-label {
     font-size: 11px;
     color: rgba(0, 0, 0, 0.65);
+  }
+
+  .tasks-row {
+    margin-top: 4px;
+  }
+  .tasks-btn {
+    width: 100%;
+    height: 28px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-subtle);
+    font-size: 11px;
+    font-weight: 500;
+    color: inherit;
+    cursor: pointer;
+  }
+  .tasks-btn:hover:not(:disabled) {
+    background: rgba(216, 90, 48, 0.1);
+    color: var(--accent);
+    border-color: rgba(216, 90, 48, 0.3);
+  }
+  .tasks-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .ranges {
