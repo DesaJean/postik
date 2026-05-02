@@ -1,6 +1,6 @@
 use crate::google::{self, GoogleAccountInfo, SyncRange};
 use crate::launcher;
-use crate::storage::{GoogleEventRecord, NoteRecord, Storage};
+use crate::storage::{GoogleEventRecord, NoteRecord, PomodoroDayBucket, Storage};
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
 use serde::Serialize;
@@ -113,6 +113,17 @@ pub fn update_note_tags(
 ) -> Result<(), String> {
     storage
         .update_tags(&note_id, tags.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_note_recurring_rule(
+    note_id: String,
+    rule: Option<String>,
+    storage: State<Storage>,
+) -> Result<(), String> {
+    storage
+        .update_recurring_rule(&note_id, rule.as_deref())
         .map_err(|e| e.to_string())
 }
 
@@ -282,6 +293,38 @@ pub fn set_setting(
 pub fn open_url(url: String) -> Result<(), String> {
     launcher::launch(None, Some(&url));
     Ok(())
+}
+
+#[derive(Serialize, Clone)]
+pub struct PomodoroStats {
+    pub today_seconds: i64,
+    pub week_seconds: i64,
+    pub last_seven_days: Vec<PomodoroDayBucket>,
+}
+
+#[tauri::command]
+pub fn pomodoro_stats(storage: State<Storage>) -> Result<PomodoroStats, String> {
+    let now = chrono::Utc::now();
+    let start_of_today = now
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .map(|d| d.and_utc().timestamp())
+        .unwrap_or(0);
+    let start_of_week = now.timestamp() - 7 * 86400;
+    let today = storage
+        .pomodoro_seconds_since(start_of_today)
+        .map_err(|e| e.to_string())?;
+    let week = storage
+        .pomodoro_seconds_since(start_of_week)
+        .map_err(|e| e.to_string())?;
+    let buckets = storage
+        .pomodoro_daily_buckets(7)
+        .map_err(|e| e.to_string())?;
+    Ok(PomodoroStats {
+        today_seconds: today,
+        week_seconds: week,
+        last_seven_days: buckets,
+    })
 }
 
 #[tauri::command]

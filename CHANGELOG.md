@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-02
+
+### Added — timer power features
+
+- **Pomodoro statistics** (C2). Settings → Focus stats shows today's
+  focus minutes, last 7 days total, and a 7-bar mini-chart. Each
+  completed work session is logged to the new `pomodoro_sessions`
+  table when the work→break transition fires.
+- **Recurring reminders** (C3). Per-note daily/weekly schedule in the
+  appearance popover: pick a time and which days of the week. A
+  background tokio task wakes once a minute, fires matching notes
+  (focus + native notification). Schedule is JSON-encoded on the note
+  row; minute-level dedup via `recurring_last_fired`.
+
 ## [0.4.0] - 2026-05-01
 
 ### Added — organisation

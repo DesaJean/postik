@@ -362,6 +362,19 @@ impl TimerEngine {
                                     if phase == PomodoroPhase::Work {
                                         t.pomodoro_completed_cycles =
                                             t.pomodoro_completed_cycles.saturating_add(1);
+                                        // Record the focus session for the
+                                        // stats dashboard. Errors are logged;
+                                        // a stats hiccup must never abort
+                                        // the timer.
+                                        let now_ts = chrono::Utc::now().timestamp();
+                                        if let Err(e) = storage.record_pomodoro_session(
+                                            Some(note_id),
+                                            now_ts - total,
+                                            now_ts,
+                                            total,
+                                        ) {
+                                            log::warn!("record pomodoro session failed: {e}");
+                                        }
                                     }
                                     let limit_reached = t
                                         .pomodoro_total_cycles

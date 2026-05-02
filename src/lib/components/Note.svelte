@@ -20,6 +20,7 @@
   import type {
     ColorId,
     NoteConfig,
+    RecurringRule,
     TextColorId,
     TimerStatePayload,
     TimerTickPayload,
@@ -43,6 +44,7 @@
   let pinned = $state(true);
   let focusMode = $state(false);
   let tags = $state<string[]>([]);
+  let recurringRule = $state<RecurringRule | null>(null);
   // Markdown preview vs raw-text editor. Toggled from the title bar.
   // Event-backed notes default to preview because they're already
   // read-only — markdown looks nicer than raw text for an event body.
@@ -90,6 +92,13 @@
     opacity = found.opacity;
     pinned = found.always_on_top;
     tags = parseTags(found.tags);
+    if (found.recurring_rule) {
+      try {
+        recurringRule = JSON.parse(found.recurring_rule);
+      } catch {
+        recurringRule = null;
+      }
+    }
 
     timer = await tauri.getTimerState(noteId);
 
@@ -206,6 +215,11 @@
     tags = next;
     const joined = joinTags(next);
     await tauri.updateNoteTags(noteId, joined === '' ? null : joined);
+  }
+
+  async function changeRecurring(rule: RecurringRule | null) {
+    recurringRule = rule;
+    await tauri.updateNoteRecurringRule(noteId, rule ? JSON.stringify(rule) : null);
   }
 
   async function togglePin() {
@@ -395,10 +409,12 @@
         {opacity}
         {textColorId}
         {tags}
+        {recurringRule}
         onColorChange={changeColor}
         onOpacityChange={changeOpacity}
         onTextColorChange={changeTextColor}
         onTagsChange={changeTags}
+        onRecurringChange={changeRecurring}
       />
     </div>
   </div>

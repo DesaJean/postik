@@ -26,6 +26,9 @@ export const tauri = {
   updateNoteTags: (noteId: string, tags: string | null) =>
     invoke<void>('update_note_tags', { noteId, tags }),
 
+  updateNoteRecurringRule: (noteId: string, rule: string | null) =>
+    invoke<void>('update_note_recurring_rule', { noteId, rule }),
+
   updateNoteOpacity: (noteId: string, opacity: number) =>
     invoke<void>('update_note_opacity', { noteId, opacity }),
 
@@ -85,6 +88,13 @@ export const tauri = {
   listSettings: () => invoke<Array<{ key: string; value: string }>>('list_settings'),
 
   openUrl: (url: string) => invoke<void>('open_url', { url }),
+
+  pomodoroStats: () =>
+    invoke<{
+      today_seconds: number;
+      week_seconds: number;
+      last_seven_days: Array<{ date: string; seconds: number }>;
+    }>('pomodoro_stats'),
 
   // Google Calendar
   googleIsConfigured: () => invoke<boolean>('google_is_configured'),

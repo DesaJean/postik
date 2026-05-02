@@ -1,14 +1,50 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Switch from './Switch.svelte';
   import { settingsStore } from '../stores/settings.svelte';
   import { SOUND_CHOICES, playTimerDone, type SoundChoice } from '../utils/sound';
   import { checkForUpdate, downloadAndInstall, restart, type UpdateStatus } from '../utils/updater';
+  import { tauri } from '../utils/tauri';
 
   interface Props {
     onBack: () => void;
   }
 
   let { onBack }: Props = $props();
+
+  // Pomodoro statistics. Loaded on mount and refreshed each time Settings
+  // becomes visible — sessions accumulate while the user is in the app.
+  let stats = $state<{
+    today_seconds: number;
+    week_seconds: number;
+    last_seven_days: Array<{ date: string; seconds: number }>;
+  } | null>(null);
+  async function loadStats() {
+    try {
+      stats = await tauri.pomodoroStats();
+    } catch (e) {
+      console.error('pomodoro_stats failed', e);
+    }
+  }
+  onMount(loadStats);
+
+  function fmtMinutes(seconds: number): string {
+    const m = Math.round(seconds / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
+  }
+
+  let maxBucketSeconds = $derived(
+    Math.max(1, ...(stats?.last_seven_days.map((b) => b.seconds) ?? [0])),
+  );
+
+  function dayLabel(iso: string): string {
+    // YYYY-MM-DD → 'Mon', 'Tue', etc. (UTC). Last bar is "today".
+    const d = new Date(iso + 'T12:00:00Z');
+    return d.toLocaleDateString(undefined, { weekday: 'short' });
+  }
 
   function selectSound(id: SoundChoice) {
     settingsStore.setSoundChoice(id);
@@ -144,6 +180,39 @@
           </div>
           <div class="row-helper sound-helper">Click any option to preview and select.</div>
         </div>
+      {/if}
+    </section>
+
+    <section>
+      <h2 class="section-heading">Focus stats</h2>
+      {#if stats}
+        <div class="stats-row">
+          <div class="stats-figure">
+            <div class="stats-value">{fmtMinutes(stats.today_seconds)}</div>
+            <div class="stats-caption">today</div>
+          </div>
+          <div class="stats-figure">
+            <div class="stats-value">{fmtMinutes(stats.week_seconds)}</div>
+            <div class="stats-caption">last 7 days</div>
+          </div>
+        </div>
+        <div class="stats-chart">
+          {#each stats.last_seven_days as b, i (b.date)}
+            {@const last = i === stats.last_seven_days.length - 1}
+            <div class="stats-bar">
+              <div
+                class="stats-bar-fill"
+                style="height: {Math.max(2, (b.seconds / maxBucketSeconds) * 64)}px"
+                title={`${dayLabel(b.date)}: ${fmtMinutes(b.seconds)}`}
+              ></div>
+              <div class="stats-bar-label" class:current={last}>
+                {last ? 'Today' : dayLabel(b.date)}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="row-helper" style="padding: 0 16px 12px">Loading…</p>
       {/if}
     </section>
 
@@ -345,6 +414,56 @@
   .sound-helper {
     margin-top: 8px;
   }
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    padding: 4px 16px 8px;
+  }
+  .stats-figure {
+    flex: 1;
+  }
+  .stats-value {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+  .stats-caption {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+  .stats-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 12px 16px 12px;
+    height: 90px;
+  }
+  .stats-bar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .stats-bar-fill {
+    width: 100%;
+    background: rgba(216, 90, 48, 0.6);
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+  }
+  .stats-bar-label {
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+  .stats-bar-label.current {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
   .update-btn {
     flex-shrink: 0;
     padding: 5px 12px;

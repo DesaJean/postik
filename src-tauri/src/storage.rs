@@ -45,6 +45,14 @@ pub struct NoteRecord {
     /// mean untagged. The frontend splits/joins; storage stays flat.
     #[serde(default)]
     pub tags: Option<String>,
+    /// JSON-encoded recurring schedule. Format:
+    /// `{"hour":9,"minute":0,"days":[1,2,3,4,5]}`. `None` = not recurring.
+    #[serde(default)]
+    pub recurring_rule: Option<String>,
+    /// Last "YYYY-MM-DDTHH:MM" we fired this recurrence at. Used to
+    /// suppress duplicate fires within the same minute window.
+    #[serde(default)]
+    pub recurring_last_fired: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +62,14 @@ pub struct GoogleAccount {
     pub refresh_token: String,
     pub access_token_expires_at: i64,
     pub connected_at: i64,
+}
+
+/// One bucket per UTC day used to render the bar chart in Settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PomodoroDayBucket {
+    /// Day key as `YYYY-MM-DD` (UTC).
+    pub date: String,
+    pub seconds: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,6 +199,16 @@ impl Storage {
                 synced_at INTEGER NOT NULL,
                 FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                note_id TEXT,
+                started_at INTEGER NOT NULL,
+                finished_at INTEGER NOT NULL,
+                duration_seconds INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_pomodoro_sessions_finished
+                ON pomodoro_sessions (finished_at);
             ",
         )?;
         // Add `text_color` column for older DBs that pre-date the feature.
@@ -216,6 +242,17 @@ impl Storage {
         // Empty string and NULL are equivalent — both mean "untagged".
         // Frontend handles parsing/joining; storage stays flat.
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN tags TEXT", []);
+        // Recurring schedule as a JSON object on the note row. Format:
+        //   {"hour":9,"minute":0,"days":[0,1,2,3,4,5,6]}
+        // (days follow JS getDay(): 0=Sun..6=Sat). NULL = no recurrence.
+        // last_fired_minute_key holds the most recent "YYYY-MM-DDTHH:MM"
+        // we fired this rule at, used to suppress duplicates within the
+        // same minute window.
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN recurring_rule TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE notes ADD COLUMN recurring_last_fired TEXT",
+            [],
+        );
         Ok(())
     }
 
@@ -243,13 +280,15 @@ impl Storage {
             text_color: None,
             event_id: None,
             tags: None,
+            recurring_rule: None,
+            recurring_last_fired: None,
         })
     }
 
     pub fn list_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
              FROM notes
              WHERE archived_at IS NULL
              ORDER BY
@@ -273,6 +312,8 @@ impl Storage {
                 text_color: r.get(11)?,
                 event_id: r.get(12)?,
                 tags: r.get(13)?,
+                recurring_rule: r.get(14)?,
+                recurring_last_fired: r.get(15)?,
             })
         })?;
         let mut out = Vec::new();
@@ -285,7 +326,7 @@ impl Storage {
     pub fn get_note(&self, id: &str) -> Result<Option<NoteRecord>> {
         let conn = self.conn.lock();
         conn.query_row(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
              FROM notes WHERE id = ?1",
             [id],
             |r| {
@@ -304,6 +345,8 @@ impl Storage {
                     text_color: r.get(11)?,
                     event_id: r.get(12)?,
                     tags: r.get(13)?,
+                    recurring_rule: r.get(14)?,
+                    recurring_last_fired: r.get(15)?,
                 })
             },
         )
@@ -329,6 +372,60 @@ impl Storage {
             params![color_id, now, id],
         )?;
         Ok(())
+    }
+
+    pub fn update_recurring_rule(&self, id: &str, rule: Option<&str>) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET recurring_rule = ?1, updated_at = ?2 WHERE id = ?3",
+            params![rule, now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn mark_recurring_fired(&self, id: &str, minute_key: &str) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET recurring_last_fired = ?1 WHERE id = ?2",
+            params![minute_key, id],
+        )?;
+        Ok(())
+    }
+
+    /// Notes with a non-NULL `recurring_rule`. Used by the background
+    /// scheduler to evaluate which notes might fire each minute.
+    pub fn list_recurring_notes(&self) -> Result<Vec<NoteRecord>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+             FROM notes WHERE recurring_rule IS NOT NULL AND archived_at IS NULL",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(NoteRecord {
+                id: r.get(0)?,
+                content: r.get(1)?,
+                color_id: r.get(2)?,
+                opacity: r.get(3)?,
+                always_on_top: r.get::<_, i64>(4)? != 0,
+                x: r.get(5)?,
+                y: r.get(6)?,
+                width: r.get(7)?,
+                height: r.get(8)?,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
+                text_color: r.get(11)?,
+                event_id: r.get(12)?,
+                tags: r.get(13)?,
+                recurring_rule: r.get(14)?,
+                recurring_last_fired: r.get(15)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     pub fn update_tags(&self, id: &str, tags: Option<&str>) -> Result<()> {
@@ -420,7 +517,7 @@ impl Storage {
     pub fn list_archived_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
              FROM notes
              WHERE archived_at IS NOT NULL
              ORDER BY archived_at DESC",
@@ -441,6 +538,8 @@ impl Storage {
                 text_color: r.get(11)?,
                 event_id: r.get(12)?,
                 tags: r.get(13)?,
+                recurring_rule: r.get(14)?,
+                recurring_last_fired: r.get(15)?,
             })
         })?;
         let mut out = Vec::new();
@@ -571,6 +670,75 @@ impl Storage {
         Ok(out)
     }
 
+    // ---------------- Pomodoro stats ----------------
+
+    /// Record one completed pomodoro work session. Called from the
+    /// timer engine on Work→Break transitions. Break sessions are not
+    /// recorded (the focus dashboard only tracks productive minutes).
+    pub fn record_pomodoro_session(
+        &self,
+        note_id: Option<&str>,
+        started_at: i64,
+        finished_at: i64,
+        duration_seconds: i64,
+    ) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO pomodoro_sessions (note_id, started_at, finished_at, duration_seconds)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![note_id, started_at, finished_at, duration_seconds],
+        )?;
+        Ok(())
+    }
+
+    /// Sum of pomodoro work seconds since `since` (unix timestamp).
+    pub fn pomodoro_seconds_since(&self, since: i64) -> Result<i64> {
+        let conn = self.conn.lock();
+        let total: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(duration_seconds), 0) FROM pomodoro_sessions WHERE finished_at >= ?1",
+            [since],
+            |r| r.get(0),
+        )?;
+        Ok(total)
+    }
+
+    /// Per-day buckets (UTC) for the last `days` days, oldest first.
+    /// Empty days appear with `seconds = 0` so the chart renders as a
+    /// continuous bar even after long absences.
+    pub fn pomodoro_daily_buckets(&self, days: i64) -> Result<Vec<PomodoroDayBucket>> {
+        let conn = self.conn.lock();
+        let now = chrono::Utc::now().timestamp();
+        let earliest = now - (days - 1) * 86400;
+        // Pull raw sums per day from SQLite.
+        let mut stmt = conn.prepare(
+            "SELECT strftime('%Y-%m-%d', finished_at, 'unixepoch') AS day,
+                    SUM(duration_seconds) AS secs
+             FROM pomodoro_sessions
+             WHERE finished_at >= ?1
+             GROUP BY day
+             ORDER BY day",
+        )?;
+        let rows = stmt.query_map([earliest], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+        })?;
+        let mut got = std::collections::HashMap::new();
+        for row in rows {
+            let (day, secs) = row?;
+            got.insert(day, secs);
+        }
+        // Backfill missing days so the bar chart has a consistent length.
+        let mut out = Vec::with_capacity(days as usize);
+        for offset in (0..days).rev() {
+            let ts = now - offset * 86400;
+            let day = chrono::DateTime::from_timestamp(ts, 0)
+                .map(|d| d.format("%Y-%m-%d").to_string())
+                .unwrap_or_default();
+            let secs = got.get(&day).copied().unwrap_or(0);
+            out.push(PomodoroDayBucket { date: day, seconds: secs });
+        }
+        Ok(out)
+    }
+
     // ---------------- Google Calendar ----------------
 
     pub fn save_google_account(&self, acc: &GoogleAccount) -> Result<()> {
@@ -652,6 +820,8 @@ impl Storage {
             text_color: None,
             event_id: Some(event_id.to_string()),
             tags: None,
+            recurring_rule: None,
+            recurring_last_fired: None,
         })
     }
 

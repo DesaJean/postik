@@ -2,15 +2,19 @@
   import { COLORS, TEXT_COLORS, getColor } from '../utils/colors';
   import type { ColorId, TextColorId } from '../types';
 
+  import type { RecurringRule } from '../types';
+
   interface Props {
     colorId: ColorId;
     opacity: number;
     textColorId: TextColorId;
     tags: string[];
+    recurringRule: RecurringRule | null;
     onColorChange: (id: ColorId) => void;
     onOpacityChange: (value: number) => void;
     onTextColorChange: (id: TextColorId) => void;
     onTagsChange: (tags: string[]) => void;
+    onRecurringChange: (rule: RecurringRule | null) => void;
   }
 
   let {
@@ -18,11 +22,53 @@
     opacity,
     textColorId,
     tags,
+    recurringRule,
     onColorChange,
     onOpacityChange,
     onTextColorChange,
     onTagsChange,
+    onRecurringChange,
   }: Props = $props();
+
+  // Recurring schedule local state, mirrored to props on change.
+  let recurringEnabled = $derived(recurringRule !== null);
+  let recurringTime = $derived(
+    recurringRule
+      ? `${String(recurringRule.hour).padStart(2, '0')}:${String(recurringRule.minute).padStart(2, '0')}`
+      : '09:00',
+  );
+  let recurringDays = $derived(recurringRule?.days ?? [1, 2, 3, 4, 5]);
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function toggleRecurring() {
+    if (recurringEnabled) {
+      onRecurringChange(null);
+    } else {
+      onRecurringChange({ hour: 9, minute: 0, days: [1, 2, 3, 4, 5] });
+    }
+  }
+
+  function onRecurringTimeInput(e: Event) {
+    const v = (e.target as HTMLInputElement).value;
+    const m = v.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return;
+    const hour = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+    const minute = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+    onRecurringChange({ hour, minute, days: recurringDays });
+  }
+
+  function toggleDay(day: number) {
+    let next: number[];
+    if (recurringDays.includes(day)) {
+      next = recurringDays.filter((d) => d !== day);
+    } else {
+      next = [...recurringDays, day].sort((a, b) => a - b);
+    }
+    if (next.length === 0) return; // never empty — would never fire
+    const [h, m] = recurringTime.split(':').map((s) => parseInt(s, 10));
+    onRecurringChange({ hour: h, minute: m, days: next });
+  }
 
   let tagInput = $state('');
 
@@ -213,6 +259,40 @@
           onblur={addTag}
           aria-label="New tag"
         />
+      </div>
+
+      <div class="divider" aria-hidden="true"></div>
+
+      <div class="section">
+        <label class="recurring-toggle">
+          <input type="checkbox" checked={recurringEnabled} onchange={toggleRecurring} />
+          <span>Recurring reminder</span>
+        </label>
+        {#if recurringEnabled}
+          <div class="recurring-row">
+            <input
+              type="time"
+              class="recurring-time"
+              value={recurringTime}
+              oninput={onRecurringTimeInput}
+              aria-label="Recurring time"
+            />
+          </div>
+          <div class="recurring-days">
+            {#each DAY_NAMES as label, idx (idx)}
+              <button
+                type="button"
+                class="day-chip"
+                class:active={recurringDays.includes(idx)}
+                onclick={() => toggleDay(idx)}
+                aria-pressed={recurringDays.includes(idx)}
+                title={label}
+              >
+                {label[0]}
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
     </div>
   {/if}
@@ -462,6 +542,59 @@
     outline: none;
     background: white;
     border-color: rgba(216, 90, 48, 0.4);
+  }
+
+  .recurring-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .recurring-toggle input {
+    accent-color: var(--accent);
+  }
+  .recurring-row {
+    margin-top: 6px;
+  }
+  .recurring-time {
+    width: 100%;
+    height: 24px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid transparent;
+    padding: 0 8px;
+    font-size: 11px;
+    color: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  .recurring-time:focus {
+    outline: none;
+    background: white;
+    border-color: rgba(216, 90, 48, 0.4);
+  }
+  .recurring-days {
+    display: flex;
+    gap: 3px;
+    margin-top: 6px;
+  }
+  .day-chip {
+    flex: 1;
+    height: 22px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .day-chip:hover {
+    background: rgba(216, 90, 48, 0.1);
+    color: var(--accent);
+  }
+  .day-chip.active {
+    background: var(--accent);
+    color: white;
   }
 
   .opacity-slider {

@@ -3,6 +3,7 @@
 mod commands;
 mod google;
 mod launcher;
+mod recurring;
 mod shortcuts;
 mod storage;
 mod timer;
@@ -35,6 +36,7 @@ pub fn run() {
             commands::update_note_color,
             commands::update_note_text_color,
             commands::update_note_tags,
+            commands::update_note_recurring_rule,
             commands::update_note_opacity,
             commands::update_note_position,
             commands::update_note_size,
@@ -58,6 +60,7 @@ pub fn run() {
             commands::set_setting,
             commands::list_settings,
             commands::open_url,
+            commands::pomodoro_stats,
             commands::google_is_configured,
             commands::google_connect,
             commands::google_disconnect,
@@ -161,6 +164,10 @@ pub fn run() {
             // is read fresh each tick so toggling it from the UI takes
             // effect on the next iteration without a restart.
             spawn_google_auto_sync(app.handle().clone());
+
+            // Recurring per-note schedules. Wakes once a minute and fires
+            // matching notes (focus + system notification).
+            recurring::spawn(app.handle().clone());
 
             Ok(())
         })

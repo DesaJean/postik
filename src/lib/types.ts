@@ -26,6 +26,16 @@ export interface NoteConfig {
   event_id: string | null;
   /** Comma-separated lowercase tag list. `null` and `''` mean untagged. */
   tags: string | null;
+  /** JSON-encoded recurring rule. `null` = no recurrence. */
+  recurring_rule: string | null;
+  recurring_last_fired: string | null;
+}
+
+export interface RecurringRule {
+  hour: number;
+  minute: number;
+  /** JS getDay(): 0=Sun..6=Sat. */
+  days: number[];
 }
 
 export interface GoogleAccountInfo {
