@@ -53,6 +53,18 @@ pub struct NoteRecord {
     /// suppress duplicate fires within the same minute window.
     #[serde(default)]
     pub recurring_last_fired: Option<String>,
+    /// Optional grouping (Work / Personal / etc). `None` = no stack.
+    #[serde(default)]
+    pub stack_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackRecord {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub sort_index: i64,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,6 +225,14 @@ impl Storage {
                 connected_at INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS stacks (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                color TEXT,
+                sort_index INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS pomodoro_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 note_id TEXT,
@@ -247,6 +267,8 @@ impl Storage {
             "ALTER TABLE google_events ADD COLUMN provider TEXT NOT NULL DEFAULT 'google'",
             [],
         );
+        // Stacks: optional grouping above tags (Work / Personal / etc).
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN stack_id TEXT", []);
         // Notes get a nullable `event_id` so a row can be marked as backed
         // by a Google Calendar event (read-only in the UI).
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN event_id TEXT", []);
@@ -300,13 +322,14 @@ impl Storage {
             tags: None,
             recurring_rule: None,
             recurring_last_fired: None,
+            stack_id: None,
         })
     }
 
     pub fn list_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired, stack_id
              FROM notes
              WHERE archived_at IS NULL
              ORDER BY
@@ -332,6 +355,7 @@ impl Storage {
                 tags: r.get(13)?,
                 recurring_rule: r.get(14)?,
                 recurring_last_fired: r.get(15)?,
+                stack_id: r.get(16)?,
             })
         })?;
         let mut out = Vec::new();
@@ -344,7 +368,7 @@ impl Storage {
     pub fn get_note(&self, id: &str) -> Result<Option<NoteRecord>> {
         let conn = self.conn.lock();
         conn.query_row(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired, stack_id
              FROM notes WHERE id = ?1",
             [id],
             |r| {
@@ -365,6 +389,7 @@ impl Storage {
                     tags: r.get(13)?,
                     recurring_rule: r.get(14)?,
                     recurring_last_fired: r.get(15)?,
+                    stack_id: r.get(16)?,
                 })
             },
         )
@@ -388,6 +413,84 @@ impl Storage {
         conn.execute(
             "UPDATE notes SET color_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![color_id, now, id],
+        )?;
+        Ok(())
+    }
+
+    // ---------------- Stacks ----------------
+
+    pub fn list_stacks(&self) -> Result<Vec<StackRecord>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, color, sort_index, created_at FROM stacks
+             ORDER BY sort_index ASC, created_at ASC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(StackRecord {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                color: r.get(2)?,
+                sort_index: r.get(3)?,
+                created_at: r.get(4)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    pub fn create_stack(&self, name: &str, color: Option<&str>) -> Result<StackRecord> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        // Append at the end (max sort_index + 1).
+        let next_idx: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(sort_index), -1) + 1 FROM stacks",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        conn.execute(
+            "INSERT INTO stacks (id, name, color, sort_index, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, name, color, next_idx, now],
+        )?;
+        Ok(StackRecord {
+            id,
+            name: name.to_string(),
+            color: color.map(String::from),
+            sort_index: next_idx,
+            created_at: now,
+        })
+    }
+
+    pub fn update_stack(&self, id: &str, name: &str, color: Option<&str>) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE stacks SET name = ?1, color = ?2 WHERE id = ?3",
+            params![name, color, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_stack(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock();
+        // Notes referencing this stack lose the assignment but stay
+        // (better than cascading the deletion of every note in a stack).
+        conn.execute("UPDATE notes SET stack_id = NULL WHERE stack_id = ?1", [id])?;
+        conn.execute("DELETE FROM stacks WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn set_note_stack(&self, note_id: &str, stack_id: Option<&str>) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET stack_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![stack_id, now, note_id],
         )?;
         Ok(())
     }
@@ -416,7 +519,7 @@ impl Storage {
     pub fn list_recurring_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired, stack_id
              FROM notes WHERE recurring_rule IS NOT NULL AND archived_at IS NULL",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -437,6 +540,7 @@ impl Storage {
                 tags: r.get(13)?,
                 recurring_rule: r.get(14)?,
                 recurring_last_fired: r.get(15)?,
+                stack_id: r.get(16)?,
             })
         })?;
         let mut out = Vec::new();
@@ -535,7 +639,7 @@ impl Storage {
     pub fn list_archived_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired, stack_id
              FROM notes
              WHERE archived_at IS NOT NULL
              ORDER BY archived_at DESC",
@@ -558,6 +662,7 @@ impl Storage {
                 tags: r.get(13)?,
                 recurring_rule: r.get(14)?,
                 recurring_last_fired: r.get(15)?,
+                stack_id: r.get(16)?,
             })
         })?;
         let mut out = Vec::new();
@@ -687,7 +792,7 @@ impl Storage {
     pub fn list_all_notes_for_backup(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired, stack_id
              FROM notes",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -708,6 +813,7 @@ impl Storage {
                 tags: r.get(13)?,
                 recurring_rule: r.get(14)?,
                 recurring_last_fired: r.get(15)?,
+                stack_id: r.get(16)?,
             })
         })?;
         let mut out = Vec::new();
@@ -730,8 +836,8 @@ impl Storage {
                 "INSERT INTO notes (
                     id, content, color_id, opacity, always_on_top, x, y, width, height,
                     created_at, updated_at, text_color, event_id, tags,
-                    recurring_rule, recurring_last_fired
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                    recurring_rule, recurring_last_fired, stack_id
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
                 params![
                     n.id,
                     n.content,
@@ -749,6 +855,7 @@ impl Storage {
                     n.tags,
                     n.recurring_rule,
                     n.recurring_last_fired,
+                    n.stack_id,
                 ],
             )?;
         }
@@ -985,6 +1092,7 @@ impl Storage {
             tags: None,
             recurring_rule: None,
             recurring_last_fired: None,
+            stack_id: None,
         })
     }
 

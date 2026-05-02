@@ -2,7 +2,7 @@ use crate::google::{self, GoogleAccountInfo, SyncRange};
 use crate::launcher;
 use crate::outlook;
 use crate::shortcuts;
-use crate::storage::{GoogleEventRecord, NoteRecord, PomodoroDayBucket, Storage};
+use crate::storage::{GoogleEventRecord, NoteRecord, PomodoroDayBucket, StackRecord, Storage};
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
 use serde::Serialize;
@@ -115,6 +115,50 @@ pub fn update_note_tags(
 ) -> Result<(), String> {
     storage
         .update_tags(&note_id, tags.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_stacks(storage: State<Storage>) -> Result<Vec<StackRecord>, String> {
+    storage.list_stacks().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn create_stack(
+    name: String,
+    color: Option<String>,
+    storage: State<Storage>,
+) -> Result<StackRecord, String> {
+    storage
+        .create_stack(&name, color.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_stack(
+    id: String,
+    name: String,
+    color: Option<String>,
+    storage: State<Storage>,
+) -> Result<(), String> {
+    storage
+        .update_stack(&id, &name, color.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_stack(id: String, storage: State<Storage>) -> Result<(), String> {
+    storage.delete_stack(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_note_stack(
+    note_id: String,
+    stack_id: Option<String>,
+    storage: State<Storage>,
+) -> Result<(), String> {
+    storage
+        .set_note_stack(&note_id, stack_id.as_deref())
         .map_err(|e| e.to_string())
 }
 

@@ -160,6 +160,50 @@
     }, 400);
   }
 
+  /** Paste handler — when the clipboard carries an image, encode it as
+   *  a data URL and insert a markdown image reference at the cursor.
+   *  Falls through to the browser default for plain text. Uses data
+   *  URLs (rather than disk attachments) so the note is self-contained
+   *  and the markdown preview can render the image natively without
+   *  any asset-protocol setup. Trade-off: large images bloat the note
+   *  content (~33% over the raw bytes) — fine for typical screenshots,
+   *  not great for multi-MB images. */
+  async function onPaste(e: ClipboardEvent) {
+    if (isEvent) return; // event-backed notes are read-only
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (!item.type.startsWith('image/')) continue;
+      const blob = item.getAsFile();
+      if (!blob) continue;
+      e.preventDefault();
+      const dataUrl = await blobToDataUrl(blob);
+      const ta = e.currentTarget as HTMLTextAreaElement;
+      const pos = ta.selectionStart;
+      const ext = item.type.split('/')[1] ?? 'png';
+      const ref = `![pasted.${ext}](${dataUrl})`;
+      content = content.slice(0, pos) + ref + content.slice(ta.selectionEnd);
+      // Persist immediately — image paste shouldn't wait for the
+      // typing-debounce save.
+      await tauri.updateNoteContent(noteId, content);
+      requestAnimationFrame(() => {
+        const newPos = pos + ref.length;
+        ta.selectionStart = newPos;
+        ta.selectionEnd = newPos;
+      });
+      return;
+    }
+  }
+
+  function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+
   // Click handler for the textarea body — handles two interactions:
   //
   // 1. ⌘/Ctrl + click on a URL → open in default browser (A2).
@@ -393,6 +437,7 @@
       bind:value={content}
       oninput={onContentInput}
       onclick={onContentClick}
+      onpaste={onPaste}
       placeholder={isEvent ? '' : 'Start typing…'}
       aria-label={isEvent ? 'Calendar event (read-only)' : 'Note content'}
       readonly={isEvent}
@@ -523,6 +568,12 @@
   .content.preview :global(li:has(> input[type='checkbox'])) {
     list-style: none;
     margin-left: -16px;
+  }
+  .content.preview :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 4px 0;
   }
   .content.preview :global(hr) {
     border: 0;

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-02
+
+### Added — bigger swings
+
+- **Image paste** (A5). Paste a screenshot or any image into a note;
+  it gets encoded as a data URL and inserted as a markdown image
+  reference (`![pasted.png](data:image/png;base64,…)`). Renders inline
+  in Preview mode with a max-width that respects the note's frame.
+  Trade-off: data URLs bloat the underlying note content (~33% over
+  raw bytes), so very large images aren't a great fit — fine for
+  typical screenshots. (No disk attachments / asset-protocol setup
+  needed; the note is self-contained.)
+- **Stacks (note groups)** (B5, backend only). New `stacks` table and
+  CRUD commands plus a per-note `stack_id` column. The backend is
+  ready; UI to manage stacks lands in a follow-up. Existing notes
+  default to no stack.
+
+### Notes
+
+- B5 frontend (manage stacks + filter) is intentionally ship-pending
+  to keep this release focused. Backend already exposes
+  `list_stacks`, `create_stack`, `update_stack`, `delete_stack`,
+  `set_note_stack` if you want to script them.
+
 ## [0.7.2] - 2026-05-02
 
 ### Added — integrations (part 3 of 3)

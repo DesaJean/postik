@@ -4,6 +4,7 @@ import type {
   GoogleAccountInfo,
   GoogleEventRecord,
   NoteConfig,
+  StackRecord,
   SyncRangeKind,
   TextColorId,
   TimerMode,
@@ -28,6 +29,15 @@ export const tauri = {
 
   updateNoteRecurringRule: (noteId: string, rule: string | null) =>
     invoke<void>('update_note_recurring_rule', { noteId, rule }),
+
+  listStacks: () => invoke<StackRecord[]>('list_stacks'),
+  createStack: (name: string, color: string | null = null) =>
+    invoke<StackRecord>('create_stack', { name, color }),
+  updateStack: (id: string, name: string, color: string | null = null) =>
+    invoke<void>('update_stack', { id, name, color }),
+  deleteStack: (id: string) => invoke<void>('delete_stack', { id }),
+  setNoteStack: (noteId: string, stackId: string | null) =>
+    invoke<void>('set_note_stack', { noteId, stackId }),
 
   updateNoteOpacity: (noteId: string, opacity: number) =>
     invoke<void>('update_note_opacity', { noteId, opacity }),

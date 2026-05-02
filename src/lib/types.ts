@@ -29,6 +29,16 @@ export interface NoteConfig {
   /** JSON-encoded recurring rule. `null` = no recurrence. */
   recurring_rule: string | null;
   recurring_last_fired: string | null;
+  /** Optional grouping (Work / Personal / etc). `null` = no stack. */
+  stack_id: string | null;
+}
+
+export interface StackRecord {
+  id: string;
+  name: string;
+  color: string | null;
+  sort_index: number;
+  created_at: number;
 }
 
 export interface RecurringRule {
