@@ -3,6 +3,7 @@
 mod commands;
 mod google;
 mod launcher;
+mod outlook;
 mod recurring;
 mod shortcuts;
 mod storage;
@@ -100,6 +101,12 @@ pub fn run() {
             commands::google_set_event_timer,
             commands::google_open_event,
             commands::google_sync_tasks,
+            commands::outlook_is_configured,
+            commands::outlook_connect,
+            commands::outlook_disconnect,
+            commands::outlook_account,
+            commands::outlook_sync,
+            commands::outlook_list_events,
         ])
         .setup(|app| {
             // On macOS, hide Postik from the dock and Cmd-Tab. The user accesses

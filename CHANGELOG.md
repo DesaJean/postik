@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-02
+
+### Added — integrations (part 3 of 3)
+
+- **Outlook Calendar** (F1). Calendar tab gains an Outlook section
+  beneath the Google one. PKCE OAuth via `login.microsoftonline.com`,
+  events fetched from Microsoft Graph (`/me/calendarview`). Connect /
+  disconnect / sync mirror the Google flow; the same per-event
+  countdown machinery fires alarms before each event.
+- New build env var `POSTIK_OUTLOOK_CLIENT_ID` enables the feature
+  (Azure AD app registration → Application (client) ID; PKCE-only
+  public client, no secret needed). Without it, the Outlook section
+  is hidden — Google Calendar still works fine.
+- `google_events` gains a `provider` column so both Google and Outlook
+  rows live in the same table; a follow-up release may rename it to
+  `calendar_events` for clarity.
+
 ## [0.7.1] - 2026-05-02
 
 ### Added — integrations (part 2 of 3)

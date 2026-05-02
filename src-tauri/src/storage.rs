@@ -204,6 +204,15 @@ impl Storage {
                 FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS outlook_account (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                email TEXT NOT NULL,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT NOT NULL,
+                access_token_expires_at INTEGER NOT NULL,
+                connected_at INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS pomodoro_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 note_id TEXT,
@@ -232,6 +241,12 @@ impl Storage {
         );
         // Webhook URL POSTed when the timer fires. NULL = no webhook.
         let _ = conn.execute("ALTER TABLE timers ADD COLUMN webhook_url TEXT", []);
+        // Provider tag on google_events so the same table can hold
+        // outlook events too. Existing rows default to 'google'.
+        let _ = conn.execute(
+            "ALTER TABLE google_events ADD COLUMN provider TEXT NOT NULL DEFAULT 'google'",
+            [],
+        );
         // Notes get a nullable `event_id` so a row can be marked as backed
         // by a Google Calendar event (read-only in the UI).
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN event_id TEXT", []);
@@ -868,12 +883,75 @@ impl Storage {
         .map_err(StorageError::from)
     }
 
+    // Outlook mirrors Google's pattern. Keeping the helpers separate
+    // (rather than parameterising on provider) makes the diff small
+    // and avoids accidental cross-provider data leaks.
+    pub fn save_outlook_account(&self, acc: &GoogleAccount) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO outlook_account (id, email, access_token, refresh_token, access_token_expires_at, connected_at)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                email = excluded.email,
+                access_token = excluded.access_token,
+                refresh_token = excluded.refresh_token,
+                access_token_expires_at = excluded.access_token_expires_at,
+                connected_at = excluded.connected_at",
+            params![
+                acc.email,
+                acc.access_token,
+                acc.refresh_token,
+                acc.access_token_expires_at,
+                acc.connected_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_outlook_account(&self) -> Result<Option<GoogleAccount>> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT email, access_token, refresh_token, access_token_expires_at, connected_at
+             FROM outlook_account WHERE id = 1",
+            [],
+            |r| {
+                Ok(GoogleAccount {
+                    email: r.get(0)?,
+                    access_token: r.get(1)?,
+                    refresh_token: r.get(2)?,
+                    access_token_expires_at: r.get(3)?,
+                    connected_at: r.get(4)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(StorageError::from)
+    }
+
+    pub fn clear_outlook_account(&self) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute("DELETE FROM outlook_account WHERE id = 1", [])?;
+        // Cascade delete the outlook event-backed notes via the FK.
+        conn.execute(
+            "DELETE FROM notes WHERE event_id IN (
+                SELECT event_id FROM google_events WHERE provider = 'outlook'
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
     pub fn clear_google_account(&self) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute("DELETE FROM google_account WHERE id = 1", [])?;
-        // Cascade delete the event-backed notes, which cascades through to
-        // their google_events rows via the FK.
-        conn.execute("DELETE FROM notes WHERE event_id IS NOT NULL", [])?;
+        // Cascade delete only Google-provider events (the shared
+        // google_events table now holds Outlook rows too).
+        conn.execute(
+            "DELETE FROM notes WHERE event_id IN (
+                SELECT event_id FROM google_events WHERE provider = 'google'
+            )",
+            [],
+        )?;
         Ok(())
     }
 
@@ -911,17 +989,26 @@ impl Storage {
     }
 
     pub fn upsert_google_event(&self, e: &GoogleEventRecord) -> Result<()> {
+        self.upsert_calendar_event(e, "google")
+    }
+
+    pub fn upsert_outlook_event(&self, e: &GoogleEventRecord) -> Result<()> {
+        self.upsert_calendar_event(e, "outlook")
+    }
+
+    fn upsert_calendar_event(&self, e: &GoogleEventRecord, provider: &str) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO google_events (event_id, note_id, title, description, start_time, end_time, html_link, timer_armed, timer_offset_seconds, synced_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "INSERT INTO google_events (event_id, note_id, title, description, start_time, end_time, html_link, timer_armed, timer_offset_seconds, synced_at, provider)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(event_id) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
                 start_time = excluded.start_time,
                 end_time = excluded.end_time,
                 html_link = excluded.html_link,
-                synced_at = excluded.synced_at",
+                synced_at = excluded.synced_at,
+                provider = excluded.provider",
             params![
                 e.event_id,
                 e.note_id,
@@ -933,6 +1020,7 @@ impl Storage {
                 e.timer_armed as i64,
                 e.timer_offset_seconds,
                 e.synced_at,
+                provider,
             ],
         )?;
         // Also write the description into the linked note's content so the
@@ -950,12 +1038,20 @@ impl Storage {
     }
 
     pub fn list_google_events(&self) -> Result<Vec<GoogleEventRecord>> {
+        self.list_calendar_events_by_provider("google")
+    }
+
+    pub fn list_outlook_events(&self) -> Result<Vec<GoogleEventRecord>> {
+        self.list_calendar_events_by_provider("outlook")
+    }
+
+    fn list_calendar_events_by_provider(&self, provider: &str) -> Result<Vec<GoogleEventRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT event_id, note_id, title, description, start_time, end_time, html_link, timer_armed, timer_offset_seconds, synced_at
-             FROM google_events ORDER BY start_time ASC",
+             FROM google_events WHERE provider = ?1 ORDER BY start_time ASC",
         )?;
-        let rows = stmt.query_map([], |r| {
+        let rows = stmt.query_map([provider], |r| {
             Ok(GoogleEventRecord {
                 event_id: r.get(0)?,
                 note_id: r.get(1)?,
@@ -1010,26 +1106,41 @@ impl Storage {
         Ok(())
     }
 
-    /// Delete every event whose id is NOT in `keep`. Used after a sync to
-    /// prune events Google no longer returns. Their linked notes cascade.
     pub fn prune_events_outside(&self, keep: &[String]) -> Result<()> {
+        self.prune_events_outside_for_provider("google", keep)
+    }
+
+    pub fn prune_outlook_events_outside(&self, keep: &[String]) -> Result<()> {
+        self.prune_events_outside_for_provider("outlook", keep)
+    }
+
+    /// Delete every event for `provider` whose id is NOT in `keep`. Used
+    /// after a sync to prune events the source no longer returns. Linked
+    /// notes cascade via the FK.
+    fn prune_events_outside_for_provider(&self, provider: &str, keep: &[String]) -> Result<()> {
         let conn = self.conn.lock();
         if keep.is_empty() {
-            // Wipe all event-notes (and their google_events via cascade).
-            conn.execute("DELETE FROM notes WHERE event_id IS NOT NULL", [])?;
+            conn.execute(
+                "DELETE FROM notes WHERE event_id IN (
+                    SELECT event_id FROM google_events WHERE provider = ?1
+                )",
+                [provider],
+            )?;
             return Ok(());
         }
-        // Build a parameterised IN (?, ?, ?) query.
         let placeholders = std::iter::repeat("?")
             .take(keep.len())
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
-            "DELETE FROM notes WHERE event_id IS NOT NULL AND event_id NOT IN ({})",
+            "DELETE FROM notes WHERE event_id IN (
+                SELECT event_id FROM google_events
+                WHERE provider = ? AND event_id NOT IN ({})
+            )",
             placeholders,
         );
-        let params_vec: Vec<&dyn rusqlite::ToSql> =
-            keep.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let mut params_vec: Vec<&dyn rusqlite::ToSql> = vec![&provider];
+        params_vec.extend(keep.iter().map(|s| s as &dyn rusqlite::ToSql));
         conn.execute(&sql, params_vec.as_slice())?;
         Ok(())
     }

@@ -380,7 +380,7 @@ impl SyncRange {
         }
     }
 
-    fn to_window(self) -> (i64, i64) {
+    pub fn window(self) -> (i64, i64) {
         match self {
             SyncRange::Today => {
                 let now = chrono::Local::now();
@@ -410,7 +410,7 @@ pub async fn sync(
     range: SyncRange,
 ) -> Result<Vec<GoogleEventRecord>, GoogleError> {
     let acc = ensure_fresh_token(storage).await?;
-    let (start, end) = range.to_window();
+    let (start, end) = range.window();
     let time_min = chrono::DateTime::from_timestamp(start, 0)
         .unwrap_or_default()
         .to_rfc3339();

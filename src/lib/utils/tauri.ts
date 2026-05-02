@@ -129,4 +129,21 @@ export const tauri = {
     invoke<void>('google_set_event_timer', { eventId, armed, offsetSeconds }),
   googleOpenEvent: (eventId: string) => invoke<void>('google_open_event', { eventId }),
   googleSyncTasks: () => invoke<string>('google_sync_tasks'),
+
+  // Outlook (mirrors the Google command shape).
+  outlookIsConfigured: () => invoke<boolean>('outlook_is_configured'),
+  outlookConnect: () => invoke<GoogleAccountInfo>('outlook_connect'),
+  outlookDisconnect: () => invoke<void>('outlook_disconnect'),
+  outlookAccount: () => invoke<GoogleAccountInfo | null>('outlook_account'),
+  outlookSync: (
+    rangeKind: SyncRangeKind,
+    rangeStart: number | null = null,
+    rangeEnd: number | null = null,
+  ) =>
+    invoke<GoogleEventRecord[]>('outlook_sync', {
+      rangeKind,
+      rangeStart,
+      rangeEnd,
+    }),
+  outlookListEvents: () => invoke<GoogleEventRecord[]>('outlook_list_events'),
 };

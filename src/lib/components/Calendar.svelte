@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { calendarStore } from '../stores/calendar.svelte';
+  import { outlookStore } from '../stores/outlook.svelte';
   import { settingsStore } from '../stores/settings.svelte';
   import { notesStore } from '../stores/notes.svelte';
   import { tauri } from '../utils/tauri';
@@ -26,6 +27,7 @@
 
   onMount(() => {
     calendarStore.load();
+    outlookStore.load();
   });
 
   const OFFSET_OPTIONS = [
@@ -174,6 +176,57 @@
       </ul>
     {/if}
   {/if}
+
+  <!-- Outlook section: collapses cleanly when not configured. -->
+  {#if outlookStore.isConfigured}
+    <div class="provider-section">
+      <h3 class="provider-heading">Outlook</h3>
+      {#if !outlookStore.account}
+        <button
+          class="primary-btn"
+          onclick={() => outlookStore.connect()}
+          disabled={outlookStore.loading}
+        >
+          {outlookStore.loading ? 'Connecting…' : 'Connect Outlook'}
+        </button>
+        {#if outlookStore.error}<p class="error">{outlookStore.error}</p>{/if}
+      {:else}
+        <div class="header-row">
+          <div class="account">
+            <span class="email">{outlookStore.account.email}</span>
+          </div>
+          <button
+            class="icon-btn"
+            onclick={() => outlookStore.sync()}
+            disabled={outlookStore.loading}
+            aria-label="Sync now"
+          >
+            {outlookStore.loading ? '…' : '⟳'}
+          </button>
+          <button class="icon-btn" onclick={() => outlookStore.disconnect()} aria-label="Disconnect"
+            >⏻</button
+          >
+        </div>
+        {#if outlookStore.error}<p class="error">{outlookStore.error}</p>{/if}
+        {#if outlookStore.events.length === 0}
+          <p class="muted small" style="text-align: center; padding: 8px">
+            No events. Click ⟳ to sync.
+          </p>
+        {:else}
+          <ul class="event-list">
+            {#each outlookStore.events as ev (ev.event_id)}
+              <li class="event-item">
+                <button class="event-row" onclick={() => tauri.googleOpenEvent(ev.event_id)}>
+                  <span class="time">{fmtTime(ev.start_time)}</span>
+                  <span class="title">{ev.title}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -272,6 +325,23 @@
   .auto-sync-label {
     font-size: 11px;
     color: rgba(0, 0, 0, 0.65);
+  }
+
+  .provider-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .provider-heading {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  .small {
+    font-size: 10px;
   }
 
   .tasks-row {

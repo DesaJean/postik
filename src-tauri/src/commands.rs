@@ -1,5 +1,6 @@
 use crate::google::{self, GoogleAccountInfo, SyncRange};
 use crate::launcher;
+use crate::outlook;
 use crate::shortcuts;
 use crate::storage::{GoogleEventRecord, NoteRecord, PomodoroDayBucket, Storage};
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
@@ -517,6 +518,60 @@ pub async fn google_sync_tasks(
         .map_err(|e| e.to_string())?;
     let _ = app.emit("google:tasks-synced", &note_id);
     Ok(note_id)
+}
+
+// ---------------- Outlook (mirrors Google's commands) ----------------
+
+#[tauri::command]
+pub fn outlook_is_configured() -> bool {
+    outlook::is_configured()
+}
+
+#[tauri::command]
+pub async fn outlook_connect(
+    app: AppHandle,
+    storage: State<'_, Storage>,
+) -> Result<GoogleAccountInfo, String> {
+    let info = outlook::connect(&storage)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("outlook:account-changed", &info);
+    Ok(info)
+}
+
+#[tauri::command]
+pub fn outlook_disconnect(app: AppHandle, storage: State<Storage>) -> Result<(), String> {
+    outlook::disconnect(&storage).map_err(|e| e.to_string())?;
+    let _ = app.emit("outlook:account-changed", serde_json::Value::Null);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn outlook_account(storage: State<Storage>) -> Result<Option<GoogleAccountInfo>, String> {
+    outlook::account(&storage).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn outlook_sync(
+    range_kind: String,
+    range_start: Option<i64>,
+    range_end: Option<i64>,
+    app: AppHandle,
+    storage: State<'_, Storage>,
+    engine: State<'_, TimerEngine>,
+) -> Result<Vec<GoogleEventRecord>, String> {
+    let range = SyncRange::from_kind(&range_kind, range_start, range_end)
+        .ok_or_else(|| format!("invalid sync range: {}", range_kind))?;
+    let events = outlook::sync(&storage, &engine, range)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("outlook:events-synced", &events);
+    Ok(events)
+}
+
+#[tauri::command]
+pub fn outlook_list_events(storage: State<Storage>) -> Result<Vec<GoogleEventRecord>, String> {
+    storage.list_outlook_events().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
