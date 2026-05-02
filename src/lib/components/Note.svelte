@@ -8,6 +8,8 @@
   import { tauri } from '../utils/tauri';
   import { getColor, resolveTextColor } from '../utils/colors';
   import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
+  import { normaliseUrl, toggleChecklistAt, urlAtPosition } from '../utils/textarea-actions';
+  import { renderMarkdown } from '../utils/markdown';
   import { settingsStore } from '../stores/settings.svelte';
   import type {
     ColorId,
@@ -34,6 +36,11 @@
   let opacity = $state(1);
   let pinned = $state(true);
   let focusMode = $state(false);
+  // Markdown preview vs raw-text editor. Toggled from the title bar.
+  // Event-backed notes default to preview because they're already
+  // read-only — markdown looks nicer than raw text for an event body.
+  let previewMode = $state(false);
+  let renderedHtml = $derived(previewMode ? renderMarkdown(content) : '');
   let timer = $state<TimerStatePayload | null>(null);
   let flashing = $state(false);
 
@@ -128,6 +135,42 @@
     }, 400);
   }
 
+  // Click handler for the textarea body — handles two interactions:
+  //
+  // 1. ⌘/Ctrl + click on a URL → open in default browser (A2).
+  // 2. Plain click on a `- [ ]` / `- [x]` bracket → toggle (A3).
+  //
+  // We intentionally only act on the bracket characters for (2), so
+  // text-editing clicks elsewhere on a checklist line still place the
+  // cursor as expected.
+  async function onContentClick(e: MouseEvent) {
+    if (isEvent) return; // event-backed notes are read-only
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    const pos = ta.selectionStart;
+    if (e.metaKey || e.ctrlKey) {
+      const url = urlAtPosition(content, pos);
+      if (url) {
+        e.preventDefault();
+        await tauri.openUrl(normaliseUrl(url));
+        return;
+      }
+    }
+    const result = toggleChecklistAt(content, pos);
+    if (result) {
+      e.preventDefault();
+      content = result.content;
+      // Persist immediately rather than wait for the input debounce —
+      // there's no further keystroke coming and the user expects the
+      // toggle to stick.
+      await tauri.updateNoteContent(noteId, content);
+      // Restore caret on the next paint.
+      requestAnimationFrame(() => {
+        ta.selectionStart = result.caret;
+        ta.selectionEnd = result.caret;
+      });
+    }
+  }
+
   async function changeColor(id: ColorId) {
     colorId = id;
     await tauri.updateNoteColor(noteId, id);
@@ -145,6 +188,54 @@
 
   async function togglePin() {
     pinned = await tauri.toggleAlwaysOnTop(noteId);
+  }
+
+  function togglePreview() {
+    previewMode = !previewMode;
+  }
+
+  /** Click handler for the rendered preview. Intercepts:
+   *  - anchor clicks → opens via tauri.openUrl (the user wants the URL,
+   *    not in-app navigation that would unload the note window).
+   *  - checkbox clicks → finds the Nth `- [ ]` / `- [x]` line in source
+   *    and toggles it. The order of <input type=checkbox> in the
+   *    rendered HTML matches the source-line order one-to-one because
+   *    that's how marked emits task lists.
+   */
+  async function onPreviewClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'A') {
+      const href = (target as HTMLAnchorElement).getAttribute('href');
+      if (href) {
+        e.preventDefault();
+        await tauri.openUrl(href);
+      }
+      return;
+    }
+    if (
+      target.tagName === 'INPUT' &&
+      (target as HTMLInputElement).type === 'checkbox' &&
+      !isEvent
+    ) {
+      e.preventDefault();
+      const root = e.currentTarget as HTMLElement;
+      const all = root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+      const idx = Array.from(all).indexOf(target as HTMLInputElement);
+      if (idx === -1) return;
+      const lines = content.split('\n');
+      let count = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (/^\s*[-*]\s\[( |x|X)\]/.test(lines[i])) {
+          count++;
+          if (count === idx) {
+            lines[i] = lines[i].replace(/\[( |x|X)\]/, (_m, p) => (p === ' ' ? '[x]' : '[ ]'));
+            content = lines.join('\n');
+            await tauri.updateNoteContent(noteId, content);
+            return;
+          }
+        }
+      }
+    }
   }
 
   async function toggleFocus() {
@@ -185,8 +276,10 @@
     {colorId}
     {pinned}
     {focusMode}
+    {previewMode}
     onTogglePin={togglePin}
     onToggleFocus={toggleFocus}
+    onTogglePreview={togglePreview}
     onOpenTimer={() => {
       const el = document.querySelector<HTMLButtonElement>('.timer-bar button');
       el?.click();
@@ -194,14 +287,26 @@
     onClose={closeNote}
   />
 
-  <textarea
-    class="content"
-    bind:value={content}
-    oninput={onContentInput}
-    placeholder={isEvent ? '' : 'Start typing…'}
-    aria-label={isEvent ? 'Calendar event (read-only)' : 'Note content'}
-    readonly={isEvent}
-  ></textarea>
+  {#if previewMode}
+    <!-- The click handler delegates to interactive children (anchors and
+         checkboxes), which carry their own accessibility semantics. -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div class="content preview" role="document" aria-label="Note preview" onclick={onPreviewClick}>
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+      {@html renderedHtml}
+    </div>
+  {:else}
+    <textarea
+      class="content"
+      bind:value={content}
+      oninput={onContentInput}
+      onclick={onContentClick}
+      placeholder={isEvent ? '' : 'Start typing…'}
+      aria-label={isEvent ? 'Calendar event (read-only)' : 'Note content'}
+      readonly={isEvent}
+    ></textarea>
+  {/if}
 
   <div class="bottom-bar">
     <div class="timer-wrap">
@@ -262,6 +367,72 @@
     line-height: 1.5;
     color: inherit;
     outline: none;
+  }
+  .content.preview {
+    overflow-y: auto;
+    cursor: default;
+  }
+  .content.preview :global(p) {
+    margin: 0 0 6px;
+  }
+  .content.preview :global(h1),
+  .content.preview :global(h2),
+  .content.preview :global(h3) {
+    margin: 8px 0 4px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .content.preview :global(ul),
+  .content.preview :global(ol) {
+    margin: 0 0 6px;
+    padding-left: 20px;
+  }
+  .content.preview :global(li) {
+    margin: 2px 0;
+  }
+  .content.preview :global(a) {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 0.5px;
+    cursor: pointer;
+  }
+  .content.preview :global(code) {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .content.preview :global(pre) {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 6px 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0 0 6px;
+  }
+  .content.preview :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+  .content.preview :global(blockquote) {
+    border-left: 2px solid var(--note-border, currentColor);
+    padding-left: 8px;
+    margin: 0 0 6px;
+    opacity: 0.85;
+  }
+  .content.preview :global(input[type='checkbox']) {
+    cursor: pointer;
+    accent-color: var(--accent);
+    margin-right: 4px;
+  }
+  .content.preview :global(li:has(> input[type='checkbox'])) {
+    list-style: none;
+    margin-left: -16px;
+  }
+  .content.preview :global(hr) {
+    border: 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    margin: 8px 0;
   }
   .bottom-bar {
     display: flex;

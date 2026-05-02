@@ -53,6 +53,7 @@ pub fn run() {
             commands::get_setting,
             commands::set_setting,
             commands::list_settings,
+            commands::open_url,
             commands::google_is_configured,
             commands::google_connect,
             commands::google_disconnect,

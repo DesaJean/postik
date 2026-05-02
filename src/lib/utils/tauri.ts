@@ -78,6 +78,8 @@ export const tauri = {
 
   listSettings: () => invoke<Array<{ key: string; value: string }>>('list_settings'),
 
+  openUrl: (url: string) => invoke<void>('open_url', { url }),
+
   // Google Calendar
   googleIsConfigured: () => invoke<boolean>('google_is_configured'),
   googleConnect: () => invoke<GoogleAccountInfo>('google_connect'),

@@ -1,4 +1,5 @@
 use crate::google::{self, GoogleAccountInfo, SyncRange};
+use crate::launcher;
 use crate::storage::{GoogleEventRecord, NoteRecord, Storage};
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
@@ -233,6 +234,15 @@ pub fn set_setting(
             value: &value,
         },
     );
+    Ok(())
+}
+
+/// Open a URL or file in the user's default handler. Used by the
+/// in-note "click on a link with ⌘/Ctrl held" feature so notes can act
+/// as launch surfaces without us having to bundle a separate plugin.
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    launcher::launch(None, Some(&url));
     Ok(())
 }
 

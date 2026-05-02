@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-01
+
+### Added — content layer
+
+- **Click-to-open links inline** (A2). `⌘`/`Ctrl` + click any URL inside
+  a note's textarea opens it in the default browser. `www.foo.com` is
+  auto-prefixed with `https://`. Backend reuses the existing
+  `launcher::open_url` cross-platform helper.
+- **Inline checklist toggle** (A3). Click on the `[ ]` or `[x]` of any
+  `- [ ]` / `- [x]` line — including indented and `*`-bulleted variants
+  — to flip it. The cursor stays where it was. Persisted immediately, no
+  debounce wait.
+- **Markdown preview toggle** (A1). New 📄 / ✏️ button in the title bar
+  swaps the textarea for a rendered markdown view. Headings, lists,
+  code, blockquotes, GFM checkboxes, and auto-links all render. Links
+  open via `tauri.openUrl`; checkboxes are clickable and write back to
+  the source. Output is sanitised through DOMPurify.
+
+### Notes
+
+- The Daily / Meeting / Todo templates from v0.2.0 now light up: their
+  `- [ ]` lines toggle inline, and Preview mode shows them as proper
+  checkboxes.
+- 8 new unit tests (`textarea-actions.test.ts`) cover URL detection,
+  scheme normalisation, and checklist toggle across indentation +
+  bullet variants.
+
 ## [0.2.1] - 2026-05-01
 
 ### Added

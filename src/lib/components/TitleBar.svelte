@@ -7,14 +7,25 @@
     colorId: ColorId;
     pinned: boolean;
     focusMode: boolean;
+    previewMode: boolean;
     onTogglePin: () => void;
     onToggleFocus: () => void;
+    onTogglePreview: () => void;
     onOpenTimer: () => void;
     onClose: () => void;
   }
 
-  let { colorId, pinned, focusMode, onTogglePin, onToggleFocus, onOpenTimer, onClose }: Props =
-    $props();
+  let {
+    colorId,
+    pinned,
+    focusMode,
+    previewMode,
+    onTogglePin,
+    onToggleFocus,
+    onTogglePreview,
+    onOpenTimer,
+    onClose,
+  }: Props = $props();
   let color = $derived(getColor(colorId));
 
   // `data-tauri-drag-region` is the documented attribute, but it's unreliable
@@ -137,6 +148,46 @@
             stroke-width="1.2"
           />
           <circle cx="8" cy="8" r="1.6" fill="currentColor" />
+        {/if}
+      </svg>
+    </button>
+    <button
+      class="icon-btn"
+      class:active={previewMode}
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={onTogglePreview}
+      aria-label={previewMode ? 'Switch to edit mode' : 'Switch to preview mode'}
+      title={previewMode ? 'Edit' : 'Preview'}
+    >
+      <!-- Page-with-lines / "preview" icon -->
+      <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+        {#if previewMode}
+          <!-- Pencil for "edit" -->
+          <path
+            d="M11 2.5l2.5 2.5-7 7H4v-2.5z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linejoin="round"
+          />
+        {:else}
+          <!-- Doc lines for "preview" -->
+          <rect
+            x="3"
+            y="2.5"
+            width="10"
+            height="11"
+            rx="1"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.1"
+          />
+          <path
+            d="M5.5 6h5M5.5 8.5h5M5.5 11h3"
+            stroke="currentColor"
+            stroke-width="1.1"
+            stroke-linecap="round"
+          />
         {/if}
       </svg>
     </button>
