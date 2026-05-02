@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.8.0; this finishes the UI half.
 - **Filter chips on the Notes tab.** When at least one stack
   exists, the controller's Notes tab gets an `All / <stacks…> /
-  Unstacked` chip row above the search input. Filter is purely
+Unstacked` chip row above the search input. Filter is purely
   client-side and stacks alongside the existing tag filter +
   search query.
 - **Per-note stack picker.** The appearance popover gains a Stack
