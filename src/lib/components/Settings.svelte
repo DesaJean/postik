@@ -8,6 +8,7 @@
   import { eventToAccelerator, prettyAccelerator } from '../utils/keybind';
   import { confirm, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
   import { notesStore } from '../stores/notes.svelte';
+  import { stacksStore } from '../stores/stacks.svelte';
 
   interface Props {
     onBack: () => void;
@@ -29,7 +30,52 @@
       console.error('pomodoro_stats failed', e);
     }
   }
-  onMount(loadStats);
+  onMount(() => {
+    loadStats();
+    stacksStore.load();
+  });
+
+  // Stack management: name + optional color hex. The form is hidden
+  // until "New stack" is clicked to keep the panel uncluttered when
+  // the user already has the stacks they want.
+  let newStackName = $state('');
+  let newStackColor = $state('#7c3aed');
+  let newStackOpen = $state(false);
+  let stackError = $state<string | null>(null);
+  async function addStack() {
+    const name = newStackName.trim();
+    if (!name) return;
+    stackError = null;
+    try {
+      await stacksStore.create(name, newStackColor || null);
+      newStackName = '';
+      newStackOpen = false;
+    } catch (e) {
+      stackError = String(e);
+    }
+  }
+  async function renameStack(id: string, name: string, color: string | null) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      await stacksStore.update(id, trimmed, color);
+    } catch (e) {
+      stackError = String(e);
+    }
+  }
+  async function removeStack(id: string, name: string) {
+    const ok = await confirm(
+      `Delete stack "${name}"? Notes assigned to it will become unstacked. This is reversible by re-creating the stack and re-assigning.`,
+      { title: 'Delete stack', kind: 'warning' },
+    );
+    if (!ok) return;
+    try {
+      await stacksStore.remove(id);
+      await notesStore.load();
+    } catch (e) {
+      stackError = String(e);
+    }
+  }
 
   function fmtMinutes(seconds: number): string {
     const m = Math.round(seconds / 60);
@@ -490,6 +536,85 @@
     </section>
 
     <section>
+      <h2 class="section-heading">Stacks</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Group your notes</div>
+          <div class="row-helper">
+            Stacks let you bucket notes into Work / Personal / etc. The Notes tab gets a chip row
+            above the list so you can flip between buckets without searching.
+          </div>
+        </div>
+      </div>
+      {#if stacksStore.stacks.length > 0}
+        <ul class="stacks-list">
+          {#each stacksStore.stacks as s (s.id)}
+            <li class="stack-row">
+              <input
+                type="color"
+                class="stack-color"
+                value={s.color ?? '#7c3aed'}
+                onchange={(e) =>
+                  renameStack(s.id, s.name, (e.currentTarget as HTMLInputElement).value)}
+                aria-label={`Color for ${s.name}`}
+              />
+              <input
+                type="text"
+                class="stack-name"
+                value={s.name}
+                onchange={(e) =>
+                  renameStack(s.id, (e.currentTarget as HTMLInputElement).value, s.color)}
+                aria-label={`Name for stack ${s.name}`}
+              />
+              <button
+                class="stack-delete"
+                onclick={() => removeStack(s.id, s.name)}
+                aria-label={`Delete ${s.name}`}
+                title="Delete">×</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if newStackOpen}
+        <div class="stack-row">
+          <input
+            type="color"
+            class="stack-color"
+            bind:value={newStackColor}
+            aria-label="Stack color"
+          />
+          <input
+            type="text"
+            class="stack-name"
+            placeholder="Stack name (e.g. Work)"
+            bind:value={newStackName}
+            onkeydown={(e) => e.key === 'Enter' && addStack()}
+            aria-label="New stack name"
+          />
+          <button class="update-btn" onclick={addStack}>Add</button>
+          <button
+            class="stack-delete"
+            onclick={() => {
+              newStackOpen = false;
+              newStackName = '';
+            }}
+            aria-label="Cancel">×</button
+          >
+        </div>
+      {:else}
+        <div class="row" style="padding-top: 0">
+          <button class="update-btn" onclick={() => (newStackOpen = true)}>+ New stack</button>
+        </div>
+      {/if}
+      {#if stackError}
+        <div class="row" style="padding-top: 0">
+          <p class="row-helper" style="padding: 0; color: var(--accent)">{stackError}</p>
+        </div>
+      {/if}
+    </section>
+
+    <section>
       <h2 class="section-heading">AI</h2>
       <div class="row">
         <div class="row-text">
@@ -934,6 +1059,63 @@
   }
   .update-btn.ready:hover {
     background: #c64f29;
+  }
+
+  .stacks-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stack-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px 8px;
+  }
+  .stacks-list .stack-row {
+    padding: 0;
+  }
+  .stack-color {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .stack-name {
+    flex: 1;
+    height: 26px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 0 8px;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.04);
+    color: inherit;
+  }
+  .stack-name:focus {
+    outline: none;
+    background: white;
+    border-color: rgba(216, 90, 48, 0.4);
+  }
+  .stack-delete {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stack-delete:hover {
+    background: rgba(216, 90, 48, 0.12);
+    color: var(--accent);
   }
 
   @media (prefers-color-scheme: dark) {

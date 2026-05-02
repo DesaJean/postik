@@ -18,6 +18,7 @@
   import { safeOpenUrl } from '../utils/safe-open';
   import { joinTags, parseTags } from '../utils/tags';
   import { settingsStore } from '../stores/settings.svelte';
+  import { stacksStore } from '../stores/stacks.svelte';
   import type {
     ColorId,
     NoteConfig,
@@ -46,6 +47,7 @@
   let focusMode = $state(false);
   let tags = $state<string[]>([]);
   let recurringRule = $state<RecurringRule | null>(null);
+  let stackId = $state<string | null>(null);
   // Markdown preview vs raw-text editor. Toggled from the title bar.
   // Event-backed notes default to preview because they're already
   // read-only — markdown looks nicer than raw text for an event body.
@@ -80,6 +82,7 @@
 
   onMount(async () => {
     settingsStore.load();
+    stacksStore.load();
     const all = await tauri.listNotes();
     const found = all.find((n) => n.id === noteId);
     if (!found) {
@@ -93,6 +96,7 @@
     opacity = found.opacity;
     pinned = found.always_on_top;
     tags = parseTags(found.tags);
+    stackId = found.stack_id ?? null;
     if (found.recurring_rule) {
       try {
         recurringRule = JSON.parse(found.recurring_rule);
@@ -284,6 +288,11 @@
   async function changeRecurring(rule: RecurringRule | null) {
     recurringRule = rule;
     await tauri.updateNoteRecurringRule(noteId, rule ? JSON.stringify(rule) : null);
+  }
+
+  async function changeStack(id: string | null) {
+    stackId = id;
+    await tauri.setNoteStack(noteId, id);
   }
 
   async function togglePin() {
@@ -486,11 +495,13 @@
         {textColorId}
         {tags}
         {recurringRule}
+        {stackId}
         onColorChange={changeColor}
         onOpacityChange={changeOpacity}
         onTextColorChange={changeTextColor}
         onTagsChange={changeTags}
         onRecurringChange={changeRecurring}
+        onStackChange={changeStack}
       />
     </div>
   </div>

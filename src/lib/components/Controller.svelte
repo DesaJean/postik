@@ -6,6 +6,7 @@
   import type { NoteTemplate } from '../stores/notes.svelte';
   import { distinctTags, parseTags } from '../utils/tags';
   import { settingsStore } from '../stores/settings.svelte';
+  import { stacksStore } from '../stores/stacks.svelte';
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
   import type { TimerTickPayload } from '../types';
@@ -31,9 +32,19 @@
   let tagFilter = $state<string | null>(null);
   let allTags = $derived(distinctTags(notesStore.notes));
 
+  // Stack filter: 'all' (default) shows everything; a stack id narrows
+  // the list to that stack; 'none' shows only unstacked notes. The
+  // chip row is only rendered when at least one stack exists.
+  let stackFilter = $state<string | 'all' | 'none'>('all');
+
   let filteredNotes = $derived.by(() => {
     const q = search.trim().toLowerCase();
     let list = notesStore.notes;
+    if (stackFilter === 'none') {
+      list = list.filter((n) => !n.stack_id);
+    } else if (stackFilter !== 'all') {
+      list = list.filter((n) => n.stack_id === stackFilter);
+    }
     if (tagFilter) {
       list = list.filter((n) => parseTags(n.tags).includes(tagFilter!));
     }
@@ -43,6 +54,7 @@
 
   onMount(() => {
     notesStore.load();
+    stacksStore.load();
     settingsStore.load();
 
     const unlistenTick = listen<TimerTickPayload>('timer:tick', (event) => {
@@ -268,6 +280,39 @@
             {/each}
           </div>
         </div>
+
+        {#if stacksStore.stacks.length > 0}
+          <div class="stack-filter-row">
+            <button
+              class="stack-chip"
+              class:active={stackFilter === 'all'}
+              onclick={() => (stackFilter = 'all')}
+              title="All notes"
+            >
+              All
+            </button>
+            {#each stacksStore.stacks as s (s.id)}
+              <button
+                class="stack-chip"
+                class:active={stackFilter === s.id}
+                onclick={() => (stackFilter = s.id)}
+                style={s.color ? `--chip-accent: ${s.color}` : undefined}
+                title={s.name}
+              >
+                <span class="stack-dot" aria-hidden="true"></span>
+                {s.name}
+              </button>
+            {/each}
+            <button
+              class="stack-chip"
+              class:active={stackFilter === 'none'}
+              onclick={() => (stackFilter = 'none')}
+              title="Notes without a stack"
+            >
+              Unstacked
+            </button>
+          </div>
+        {/if}
 
         {#if allTags.length > 0}
           <div class="tag-filter-row">
@@ -590,6 +635,43 @@
   .archive-link:hover {
     color: var(--accent);
     text-decoration: underline;
+  }
+
+  .stack-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 12px 6px;
+    align-items: center;
+  }
+  .stack-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .stack-chip:hover {
+    background: rgba(216, 90, 48, 0.1);
+    color: var(--accent);
+  }
+  .stack-chip.active {
+    background: var(--chip-accent, var(--accent));
+    color: white;
+  }
+  .stack-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--chip-accent, currentColor);
+  }
+  .stack-chip.active .stack-dot {
+    background: rgba(255, 255, 255, 0.85);
   }
 
   .tag-filter-row {

@@ -3,6 +3,7 @@
   import type { ColorId, TextColorId } from '../types';
 
   import type { RecurringRule } from '../types';
+  import { stacksStore } from '../stores/stacks.svelte';
 
   interface Props {
     colorId: ColorId;
@@ -10,11 +11,13 @@
     textColorId: TextColorId;
     tags: string[];
     recurringRule: RecurringRule | null;
+    stackId: string | null;
     onColorChange: (id: ColorId) => void;
     onOpacityChange: (value: number) => void;
     onTextColorChange: (id: TextColorId) => void;
     onTagsChange: (tags: string[]) => void;
     onRecurringChange: (rule: RecurringRule | null) => void;
+    onStackChange: (id: string | null) => void;
   }
 
   let {
@@ -23,11 +26,13 @@
     textColorId,
     tags,
     recurringRule,
+    stackId,
     onColorChange,
     onOpacityChange,
     onTextColorChange,
     onTagsChange,
     onRecurringChange,
+    onStackChange,
   }: Props = $props();
 
   // Recurring schedule local state, mirrored to props on change.
@@ -232,6 +237,35 @@
       </div>
 
       <div class="divider" aria-hidden="true"></div>
+
+      {#if stacksStore.stacks.length > 0}
+        <div class="section">
+          <div class="section-heading">Stack</div>
+          <div class="stack-pick">
+            <button
+              class="stack-pick-chip"
+              class:active={!stackId}
+              onclick={() => onStackChange(null)}
+              title="No stack"
+            >
+              None
+            </button>
+            {#each stacksStore.stacks as s (s.id)}
+              <button
+                class="stack-pick-chip"
+                class:active={stackId === s.id}
+                style={s.color ? `--chip-accent: ${s.color}` : undefined}
+                onclick={() => onStackChange(s.id)}
+                title={s.name}
+              >
+                <span class="stack-pick-dot" aria-hidden="true"></span>
+                {s.name}
+              </button>
+            {/each}
+          </div>
+        </div>
+        <div class="divider" aria-hidden="true"></div>
+      {/if}
 
       <div class="section">
         <div class="section-heading">Tags</div>
@@ -497,6 +531,42 @@
     font-size: 9.5px;
     color: var(--text-muted);
     line-height: 1.3;
+  }
+
+  .stack-pick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .stack-pick-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 10px;
+    font-weight: 500;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 120ms ease-out;
+  }
+  .stack-pick-chip:hover {
+    background: rgba(216, 90, 48, 0.12);
+    color: var(--accent);
+  }
+  .stack-pick-chip.active {
+    background: var(--chip-accent, var(--accent));
+    color: white;
+  }
+  .stack-pick-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--chip-accent, currentColor);
+  }
+  .stack-pick-chip.active .stack-pick-dot {
+    background: rgba(255, 255, 255, 0.85);
   }
 
   .tag-list {

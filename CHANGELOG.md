@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-04-30
+
+### Added — Stacks UI (B5 follow-up)
+
+- **Stacks management.** Settings → Stacks lists every stack, lets
+  you rename inline, recolour with a swatch picker, delete (with a
+  confirm), and create new ones. The backend has shipped since
+  v0.8.0; this finishes the UI half.
+- **Filter chips on the Notes tab.** When at least one stack
+  exists, the controller's Notes tab gets an `All / <stacks…> /
+  Unstacked` chip row above the search input. Filter is purely
+  client-side and stacks alongside the existing tag filter +
+  search query.
+- **Per-note stack picker.** The appearance popover gains a Stack
+  section with a `None` chip plus one chip per stack. Click to
+  assign; assignment is persisted via `set_note_stack`.
+
+### Notes
+
+- This closes every "skipped" item from the v0.x roadmap. The
+  remaining v1 items (D4 cloud sync, distraction blocker at the
+  network layer) stay deferred.
+
 ## [0.11.0] - 2026-04-30
 
 ### Added — the rest of the AI menu
@@ -15,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude reads every note's content + the current stack list and
   proposes 1–3 lowercase tags per note plus an optional stack
   assignment. A confirm dialog reports `N notes will be tagged, M
-  will be assigned` before any write — never silent. Useful once
+will be assigned` before any write — never silent. Useful once
   you have 20+ notes.
 - **Smart timer suggestions** (G3). The timer popover's Custom section
   shows a `✨ Suggest` button when the API key is set and the note
