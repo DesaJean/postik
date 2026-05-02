@@ -112,6 +112,32 @@
           <span class="section-heading">Opacity</span>
           <span class="opacity-value">{Math.round(opacity * 100)}%</span>
         </div>
+        <div class="opacity-presets">
+          <button
+            class="opacity-chip"
+            class:active={Math.abs(opacity - 0.4) < 0.025}
+            onclick={() => onOpacityChange(0.4)}
+            title="Ghost (40%)"
+          >
+            Ghost
+          </button>
+          <button
+            class="opacity-chip"
+            class:active={Math.abs(opacity - 0.7) < 0.025}
+            onclick={() => onOpacityChange(0.7)}
+            title="Normal (70%)"
+          >
+            Normal
+          </button>
+          <button
+            class="opacity-chip"
+            class:active={Math.abs(opacity - 1.0) < 0.025}
+            onclick={() => onOpacityChange(1)}
+            title="Opaque (100%)"
+          >
+            Opaque
+          </button>
+        </div>
         <input
           class="opacity-slider"
           type="range"
@@ -122,6 +148,7 @@
           oninput={onOpacityInput}
           aria-label="Opacity"
         />
+        <p class="opacity-hint">Hover a faded note to temporarily see it at 100%.</p>
       </div>
     </div>
   {/if}
@@ -293,6 +320,39 @@
     background-position:
       0 0,
       3px 3px;
+  }
+
+  .opacity-presets {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .opacity-chip {
+    flex: 1;
+    height: 22px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .opacity-chip:hover {
+    background: rgba(216, 90, 48, 0.08);
+    color: var(--accent);
+  }
+  .opacity-chip.active {
+    background: rgba(216, 90, 48, 0.18);
+    color: var(--accent);
+  }
+  .opacity-hint {
+    margin: 6px 0 0;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    line-height: 1.3;
   }
 
   .opacity-slider {

@@ -110,6 +110,13 @@ pub fn list_notes(storage: State<Storage>) -> Result<Vec<NoteRecord>, String> {
 }
 
 #[tauri::command]
+pub fn reorder_notes(ordered_ids: Vec<String>, storage: State<Storage>) -> Result<(), String> {
+    storage
+        .reorder_notes(&ordered_ids)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn focus_note(note_id: String, app: AppHandle, wm: State<WindowManager>) -> Result<(), String> {
     wm.focus_note(&app, &note_id).map_err(|e| e.to_string())
 }
@@ -117,6 +124,16 @@ pub fn focus_note(note_id: String, app: AppHandle, wm: State<WindowManager>) -> 
 #[tauri::command]
 pub fn hide_all_notes(app: AppHandle, wm: State<WindowManager>) -> Result<(), String> {
     wm.hide_all_notes(&app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn focus_only_note(
+    note_id: String,
+    app: AppHandle,
+    wm: State<WindowManager>,
+) -> Result<(), String> {
+    wm.focus_only_note(&app, &note_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

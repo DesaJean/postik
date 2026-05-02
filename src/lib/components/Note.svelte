@@ -33,6 +33,7 @@
   let textColorId = $state<TextColorId>('auto');
   let opacity = $state(1);
   let pinned = $state(true);
+  let focusMode = $state(false);
   let timer = $state<TimerStatePayload | null>(null);
   let flashing = $state(false);
 
@@ -146,6 +147,17 @@
     pinned = await tauri.toggleAlwaysOnTop(noteId);
   }
 
+  async function toggleFocus() {
+    if (focusMode) {
+      // Exit focus mode → restore every other note window.
+      await tauri.showAllNotes();
+      focusMode = false;
+    } else {
+      await tauri.focusOnlyNote(noteId);
+      focusMode = true;
+    }
+  }
+
   async function closeNote() {
     // Closing the note window is non-destructive: the content stays in
     // SQLite and the note remains in the controller list. Permanent
@@ -172,7 +184,9 @@
   <TitleBar
     {colorId}
     {pinned}
+    {focusMode}
     onTogglePin={togglePin}
+    onToggleFocus={toggleFocus}
     onOpenTimer={() => {
       const el = document.querySelector<HTMLButtonElement>('.timer-bar button');
       el?.click();
@@ -217,15 +231,24 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
+    /* `--note-opacity` is set inline from the persisted value; the
+     * effective alpha resolves to that by default, but the :hover rule
+     * below bumps it to 1 so faded notes become readable while
+     * interacting and snap back when the cursor leaves. */
+    --note-opacity-effective: var(--note-opacity, 1);
     background-color: color-mix(
       in srgb,
-      var(--note-fill) calc(var(--note-opacity, 1) * 100%),
+      var(--note-fill) calc(var(--note-opacity-effective) * 100%),
       transparent
     );
     border: 0.5px solid var(--note-border);
     border-radius: 8px;
     color: var(--note-text);
     overflow: hidden;
+    transition: background-color 140ms ease-out;
+  }
+  .note-shell:hover {
+    --note-opacity-effective: 1;
   }
   .note-shell.transparent {
     background: rgba(255, 255, 255, 0.05);

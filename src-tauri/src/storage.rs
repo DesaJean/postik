@@ -199,6 +199,11 @@ impl Storage {
         // Notes get a nullable `event_id` so a row can be marked as backed
         // by a Google Calendar event (read-only in the UI).
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN event_id TEXT", []);
+        // Manual sort order. NULL means "fall back to updated_at" so the
+        // existing default-sort behaviour is unchanged for users who never
+        // reorder. After a reorder, every visible row gets an explicit
+        // index.
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN sort_index INTEGER", []);
         Ok(())
     }
 
@@ -232,7 +237,11 @@ impl Storage {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id
-             FROM notes ORDER BY updated_at DESC",
+             FROM notes
+             ORDER BY
+               CASE WHEN sort_index IS NULL THEN 1 ELSE 0 END,
+               sort_index ASC,
+               updated_at DESC",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(NoteRecord {
@@ -359,6 +368,22 @@ impl Storage {
     pub fn delete_note(&self, id: &str) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute("DELETE FROM notes WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Assign sort_index 0..N to the notes in `ordered_ids` in array
+    /// order. Notes not in the list keep their existing index (or NULL).
+    /// All updates run in a single transaction.
+    pub fn reorder_notes(&self, ordered_ids: &[String]) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        for (idx, id) in ordered_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE notes SET sort_index = ?1 WHERE id = ?2",
+                params![idx as i64, id],
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 

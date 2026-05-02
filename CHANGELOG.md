@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-01
+
+### Added
+
+- **Search across notes** — search bar at the top of the controller's
+  Notes tab. Filters as you type. `⌘K` / `Ctrl+K` from anywhere focuses
+  the search input.
+- **Snooze on timer fire** — `+5m`, `+15m`, `+1h` chips in the Done
+  state. Cancels the just-fired timer and starts a fresh countdown for
+  the chosen offset.
+- **Note templates** — three quick chips below "+ New note":
+  - **Daily** (today's date + opening checklist, blue color)
+  - **Meeting** (header + Attendees/Notes scaffold, purple)
+  - **Todo** (three empty `- [ ]` lines, amber)
+    Templates render as plain text today; once inline checklists ship in
+    v0.3 they'll come alive automatically.
+- **Drag-to-reorder** — drag any row in the controller's Notes list to
+  move it. New `sort_index` column stores the manual order; rows that
+  were never reordered keep falling back to `updated_at DESC`. Disabled
+  while a search filter is active.
+- **Focus mode** — eye icon in the title bar hides every other note
+  window, so the active one is the only thing visible. Click again to
+  show all.
+- **Opacity presets + hover-to-100%** — `Ghost / Normal / Opaque` chips
+  in the appearance popover. Hovering a faded note temporarily bumps it
+  to 100% so you can read it without permanently undoing the fade.
+
 ## [0.1.10] - 2026-05-01
 
 ### Fixed

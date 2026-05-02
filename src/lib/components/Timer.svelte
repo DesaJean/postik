@@ -38,12 +38,25 @@
     await tauri.cancelTimer(noteId);
     await onChange();
   }
+
+  // Snooze: cancel the just-fired alarm and start a fresh countdown for
+  // the chosen offset. The new timer is a plain countdown — no post-action
+  // and no calendar-event accounting, so this works the same for editable
+  // notes and event-backed notes alike.
+  async function snooze(seconds: number) {
+    await tauri.cancelTimer(noteId);
+    await tauri.startTimer(noteId, 'countdown', seconds);
+    await onChange();
+  }
 </script>
 
 <div class="timer-bar" class:flashing>
   {#if timer && timer.state === 'done'}
     <span class="display done">⏱ Done</span>
     <span class="spacer"></span>
+    <button class="snooze" onclick={() => snooze(5 * 60)} title="Snooze 5 minutes">+5m</button>
+    <button class="snooze" onclick={() => snooze(15 * 60)} title="Snooze 15 minutes">+15m</button>
+    <button class="snooze" onclick={() => snooze(60 * 60)} title="Snooze 1 hour">+1h</button>
     <button class="dismiss" onclick={cancel} aria-label="Dismiss timer">Dismiss</button>
   {:else if timer && (timer.state === 'running' || timer.state === 'paused')}
     <span class="display">⏱ {display()}</span>
@@ -172,9 +185,30 @@
     background: #c64f29;
   }
 
+  .snooze {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--accent);
+    background: rgba(216, 90, 48, 0.08);
+    cursor: pointer;
+    transition: background-color 120ms ease-out;
+    font-variant-numeric: tabular-nums;
+  }
+  .snooze:hover {
+    background: rgba(216, 90, 48, 0.18);
+  }
+
   @media (prefers-color-scheme: dark) {
     .status {
       color: rgba(255, 255, 255, 0.55);
+    }
+    .snooze {
+      background: rgba(216, 90, 48, 0.18);
+    }
+    .snooze:hover {
+      background: rgba(216, 90, 48, 0.28);
     }
   }
 </style>

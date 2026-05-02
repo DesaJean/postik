@@ -6,12 +6,15 @@
   interface Props {
     colorId: ColorId;
     pinned: boolean;
+    focusMode: boolean;
     onTogglePin: () => void;
+    onToggleFocus: () => void;
     onOpenTimer: () => void;
     onClose: () => void;
   }
 
-  let { colorId, pinned, onTogglePin, onOpenTimer, onClose }: Props = $props();
+  let { colorId, pinned, focusMode, onTogglePin, onToggleFocus, onOpenTimer, onClose }: Props =
+    $props();
   let color = $derived(getColor(colorId));
 
   // `data-tauri-drag-region` is the documented attribute, but it's unreliable
@@ -106,6 +109,35 @@
           stroke-width="1.2"
           stroke-linejoin="round"
         />
+      </svg>
+    </button>
+    <button
+      class="icon-btn"
+      class:active={focusMode}
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={onToggleFocus}
+      aria-label={focusMode ? 'Exit focus mode' : 'Focus this note (hide others)'}
+      title={focusMode ? 'Exit focus mode' : 'Focus mode'}
+    >
+      <!-- Eye icon: open when focus is off, slashed when on (you're hiding others) -->
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        {#if focusMode}
+          <path
+            d="M3 3l10 10M2.5 8s2-4 5.5-4c1 0 1.9.3 2.6.7M13.5 8s-1 2-3 3.2M7 5.4a3 3 0 0 1 3.6 3.6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linecap="round"
+          />
+        {:else}
+          <path
+            d="M2.5 8s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4-5.5-4-5.5-4z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+          />
+          <circle cx="8" cy="8" r="1.6" fill="currentColor" />
+        {/if}
       </svg>
     </button>
     <button

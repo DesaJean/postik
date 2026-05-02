@@ -303,6 +303,19 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Hide every note window except the one for `note_id`. Used by the
+    /// "focus this note" button in the title bar — the user wants a clean
+    /// workspace except for the current task. `show_all_notes` reverses it.
+    pub fn focus_only_note(&self, app: &AppHandle, note_id: &str) -> tauri::Result<()> {
+        let keep = Self::note_label(note_id);
+        for w in app.webview_windows().values() {
+            if w.label().starts_with("note-") && w.label() != keep {
+                w.hide()?;
+            }
+        }
+        Ok(())
+    }
+
     /// Apply the privacy (content-protection) setting to every existing
     /// window. Called when the user flips the toggle in Settings — runtime
     /// changes don't require recreating the windows.

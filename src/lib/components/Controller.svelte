@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
   import { confirm } from '@tauri-apps/plugin-dialog';
-  import { notesStore } from '../stores/notes.svelte';
+  import { notesStore, NOTE_TEMPLATES } from '../stores/notes.svelte';
+  import type { NoteTemplate } from '../stores/notes.svelte';
   import { settingsStore } from '../stores/settings.svelte';
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
@@ -14,6 +15,18 @@
   let timersByNote = $state<Record<string, TimerTickPayload>>({});
   let view = $state<'notes' | 'settings'>('notes');
   let tab = $state<'notes' | 'calendar'>('notes');
+
+  // Search across notes. Filters by content (case-insensitive substring).
+  // Empty string disables filtering; the controller falls back to the
+  // full list. ⌘K / Ctrl+K focuses the search input from anywhere.
+  let search = $state('');
+  let searchInput: HTMLInputElement | null = $state(null);
+
+  let filteredNotes = $derived.by(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return notesStore.notes;
+    return notesStore.notes.filter((n) => n.content.toLowerCase().includes(q));
+  });
 
   onMount(() => {
     notesStore.load();
@@ -35,6 +48,18 @@
     };
   });
 
+  // ⌘K / Ctrl+K from anywhere in the controller focuses the search input
+  // and switches to the Notes tab if the user is currently on Calendar.
+  function onWindowKeyDown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      tab = 'notes';
+      view = 'notes';
+      // Defer focus to next tick so the input has rendered after the tab swap.
+      queueMicrotask(() => searchInput?.focus());
+    }
+  }
+
   function timerLabel(noteId: string): string | null {
     const t = timersByNote[noteId];
     if (!t || t.state !== 'running') return null;
@@ -53,6 +78,44 @@
     await notesStore.create();
   }
 
+  async function newFromTemplate(id: NoteTemplate['id']) {
+    await notesStore.createFromTemplate(id);
+  }
+
+  // Drag-to-reorder. We only enable it when search is empty: filtering +
+  // reordering at the same time would yield surprising indices because
+  // the user-visible order doesn't match the underlying notesStore.notes
+  // array. Search clears on Escape so this is a soft constraint.
+  let dragFrom = $state<number | null>(null);
+  let dragOver = $state<number | null>(null);
+
+  function onDragStart(idx: number, e: DragEvent) {
+    if (search.trim()) return;
+    dragFrom = idx;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Firefox needs some payload to start the drag.
+      e.dataTransfer.setData('text/plain', String(idx));
+    }
+  }
+  function onDragOver(idx: number, e: DragEvent) {
+    if (dragFrom === null) return;
+    e.preventDefault();
+    dragOver = idx;
+  }
+  function onDragEnd() {
+    dragFrom = null;
+    dragOver = null;
+  }
+  async function onDrop(idx: number, e: DragEvent) {
+    e.preventDefault();
+    const from = dragFrom;
+    dragFrom = null;
+    dragOver = null;
+    if (from === null || from === idx) return;
+    await notesStore.reorder(from, idx);
+  }
+
   async function deleteNote(id: string, hasContent: boolean) {
     if (hasContent) {
       const ok = await confirm('Delete this note? This cannot be undone.', {
@@ -64,6 +127,8 @@
     await notesStore.remove(id);
   }
 </script>
+
+<svelte:window onkeydown={onWindowKeyDown} />
 
 <div class="shell">
   <div class="slider" class:show-settings={view === 'settings'}>
@@ -113,6 +178,46 @@
             <span class="plus">+</span>
             <span>New note</span>
           </button>
+          <div class="template-chips">
+            {#each NOTE_TEMPLATES.filter((t) => t.id !== 'blank') as tpl (tpl.id)}
+              <button
+                class="template-chip"
+                onclick={() => newFromTemplate(tpl.id)}
+                title={`New ${tpl.label.toLowerCase()} note`}
+              >
+                <span aria-hidden="true">{tpl.emoji}</span>
+                <span>{tpl.label}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="search-row">
+          <svg class="search-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4" />
+            <path
+              d="M10.5 10.5L13.5 13.5"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search notes…"
+            bind:value={search}
+            bind:this={searchInput}
+            aria-label="Search notes"
+          />
+          {#if search}
+            <button
+              class="search-clear"
+              onclick={() => (search = '')}
+              aria-label="Clear search"
+              title="Clear">×</button
+            >
+          {/if}
         </div>
 
         <main class="list-wrap">
@@ -123,11 +228,25 @@
               <p>No notes yet.</p>
               <p class="muted">Press <kbd>⌘⇧N</kbd> or click "New note".</p>
             </div>
+          {:else if filteredNotes.length === 0}
+            <div class="empty-state">
+              <p>No matches.</p>
+              <p class="muted">Nothing for "{search.trim()}".</p>
+            </div>
           {:else}
             <ul class="note-list">
-              {#each notesStore.notes as note (note.id)}
+              {#each filteredNotes as note, idx (note.id)}
                 {@const color = getColor(note.color_id)}
-                <li class="note-item">
+                <li
+                  class="note-item"
+                  class:drag-over={dragOver === idx && dragFrom !== idx}
+                  class:dragging={dragFrom === idx}
+                  draggable={!search.trim()}
+                  ondragstart={(e) => onDragStart(idx, e)}
+                  ondragover={(e) => onDragOver(idx, e)}
+                  ondrop={(e) => onDrop(idx, e)}
+                  ondragend={onDragEnd}
+                >
                   <button
                     class="note-row"
                     onclick={() => focusNote(note.id)}
@@ -285,6 +404,79 @@
     line-height: 1;
   }
 
+  .template-chips {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .template-chip {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .template-chip:hover {
+    background: rgba(216, 90, 48, 0.08);
+    color: var(--accent);
+  }
+
+  .search-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin: 0 12px 8px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 9px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    height: 28px;
+    border-radius: 5px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(0, 0, 0, 0.03);
+    padding: 0 28px 0 28px;
+    font-size: 12px;
+    color: inherit;
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out;
+  }
+  .search-input:focus {
+    outline: none;
+    background: rgba(0, 0, 0, 0.01);
+    border-color: rgba(216, 90, 48, 0.4);
+  }
+  .search-clear {
+    position: absolute;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .search-clear:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: inherit;
+  }
+
   .list-wrap {
     flex: 1;
     overflow-y: auto;
@@ -319,6 +511,20 @@
   }
   .note-item {
     position: relative;
+    transition: opacity 120ms ease-out;
+  }
+  .note-item.dragging {
+    opacity: 0.4;
+  }
+  .note-item.drag-over::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 1px;
   }
   .note-row {
     width: 100%;
@@ -413,6 +619,22 @@
     }
     .timer-badge {
       background: rgba(255, 255, 255, 0.06);
+    }
+    .search-input {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-subtle-dark);
+    }
+    .search-input:focus {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .search-clear:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .template-chip {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .template-chip:hover {
+      background: rgba(216, 90, 48, 0.18);
     }
   }
 </style>
