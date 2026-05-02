@@ -68,6 +68,25 @@ Each PR should include:
   - [ ] `cargo test` passed
   - [ ] Docs updated when behavior changed
 
+## Releasing
+
+Tagging `vX.Y.Z` triggers `.github/workflows/release.yml` which builds
+and uploads bundles. The workflow uses `secrets.RELEASE_PAT` when
+present and falls back to `GITHUB_TOKEN`. **If your GitHub
+organization has "disable write permissions for workflows" set, the
+default token can't create releases — set up a PAT:**
+
+1. Generate a fine-grained PAT scoped to this repo with
+   `Contents: Read and write` permission.
+2. Add it as a repo secret named `RELEASE_PAT`
+   (Settings → Secrets and variables → Actions → New repository
+   secret).
+3. Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`).
+
+Until the PAT is in place, the release workflow's "Build and
+publish" step will fail with `Resource not accessible by
+integration` once the build finishes.
+
 ## Reporting bugs
 
 Open an issue using the **bug report** template under `.github/ISSUE_TEMPLATE/`.

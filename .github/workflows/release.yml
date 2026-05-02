@@ -40,7 +40,13 @@ jobs:
         run: npm ci
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a user-provided PAT (`RELEASE_PAT`) when present.
+          # The org policy "Disable write permissions for workflows"
+          # makes the default GITHUB_TOKEN unable to create releases,
+          # so a fine-grained PAT with `Contents: Read and write` is
+          # the supported path. Falls back to GITHUB_TOKEN for repos
+          # without that policy.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
           # Baked into the binary via option_env! at compile time.
           # When unset (e.g. forks without the secrets), the Calendar tab
           # falls back to a "Setup needed" empty state.
