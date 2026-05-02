@@ -249,10 +249,7 @@ impl Storage {
         // we fired this rule at, used to suppress duplicates within the
         // same minute window.
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN recurring_rule TEXT", []);
-        let _ = conn.execute(
-            "ALTER TABLE notes ADD COLUMN recurring_last_fired TEXT",
-            [],
-        );
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN recurring_last_fired TEXT", []);
         Ok(())
     }
 
@@ -734,7 +731,10 @@ impl Storage {
                 .map(|d| d.format("%Y-%m-%d").to_string())
                 .unwrap_or_default();
             let secs = got.get(&day).copied().unwrap_or(0);
-            out.push(PomodoroDayBucket { date: day, seconds: secs });
+            out.push(PomodoroDayBucket {
+                date: day,
+                seconds: secs,
+            });
         }
         Ok(out)
     }
