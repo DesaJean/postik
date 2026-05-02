@@ -28,6 +28,7 @@
     "dialog:allow-save",
     "updater:default",
     "process:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "deep-link:default"
   ]
 }

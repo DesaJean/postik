@@ -192,6 +192,7 @@ pub fn show_all_notes(app: AppHandle, wm: State<WindowManager>) -> Result<(), St
     wm.show_all_notes(&app).map_err(|e| e.to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn start_timer(
     note_id: String,
@@ -200,6 +201,7 @@ pub fn start_timer(
     pomodoro_cycles: Option<u32>,
     action_path: Option<String>,
     action_args: Option<String>,
+    webhook_url: Option<String>,
     engine: State<TimerEngine>,
 ) -> Result<(), String> {
     let m = TimerMode::from_str(&mode).ok_or_else(|| format!("invalid mode: {}", mode))?;
@@ -212,6 +214,7 @@ pub fn start_timer(
             path: action_path,
             args: action_args,
         },
+        webhook_url.filter(|s| !s.trim().is_empty()),
     );
     Ok(())
 }

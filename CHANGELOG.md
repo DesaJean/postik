@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-02
+
+### Added — integrations (part 1 of 3)
+
+- **postik:// URL handler** (F4). External tools can launch Postik with a
+  pre-filled note via `postik://new?content=Hello%20world`. Registered
+  cross-platform via the Tauri deep-link plugin; single-instance plugin
+  routes URLs to an already-running Postik instead of spawning a second
+  process.
+- **Webhook on timer fire** (F3). Per-timer optional URL field in the
+  Set-timer popover. When the countdown reaches 0 (or pomodoro/stopwatch
+  fires its post-action), Postik POSTs JSON
+  `{ note_id, mode, fired_at }` to the URL. Last-used webhook is
+  remembered alongside the rest of the action settings. Useful for
+  IFTTT, Zapier, n8n, custom dashboards.
+
+### Notes
+
+- F1 (Outlook) and F2 (Google Tasks) ship in v0.7.1 / v0.7.2.
+
 ## [0.6.0] - 2026-05-02
 
 ### Added — customisation & ops

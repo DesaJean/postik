@@ -23,6 +23,7 @@
   let actionEnabled = $state(false);
   let actionPath = $state('');
   let actionArgs = $state('');
+  let webhookUrl = $state('');
   let pomoCycles = $state(4);
 
   // Seed the form from saved settings only when the popover transitions
@@ -34,8 +35,9 @@
     untrack(() => {
       actionPath = settingsStore.lastActionPath;
       actionArgs = settingsStore.lastActionArgs;
+      webhookUrl = settingsStore.lastWebhookUrl ?? '';
       pomoCycles = settingsStore.lastPomodoroCycles || 4;
-      actionEnabled = actionPath !== '' || actionArgs !== '';
+      actionEnabled = actionPath !== '' || actionArgs !== '' || webhookUrl !== '';
     });
   });
 
@@ -69,6 +71,7 @@
     return {
       actionPath: actionEnabled ? actionPath.trim() || null : null,
       actionArgs: actionEnabled ? actionArgs.trim() || null : null,
+      webhookUrl: actionEnabled ? webhookUrl.trim() || null : null,
       // Cycle limit only applies when an action is configured for pomodoro;
       // a plain pomodoro without an action keeps cycling indefinitely as
       // before.
@@ -80,6 +83,7 @@
     if (actionEnabled) {
       await settingsStore.setLastActionPath(actionPath.trim());
       await settingsStore.setLastActionArgs(actionArgs.trim());
+      await settingsStore.setLastWebhookUrl(webhookUrl.trim());
     } else {
       // Don't wipe the saved app path on every "off" — keep it so toggling
       // back on restores the previous selection.
@@ -274,6 +278,13 @@
           placeholder="URL or args (optional)"
           bind:value={actionArgs}
           aria-label="URL or arguments to pass"
+        />
+        <input
+          type="text"
+          class="url-input"
+          placeholder="Webhook URL (POST when fired)"
+          bind:value={webhookUrl}
+          aria-label="Webhook URL"
         />
         <p class="hint">
           {#if actionPath && actionArgs}

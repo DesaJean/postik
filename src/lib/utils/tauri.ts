@@ -63,6 +63,7 @@ export const tauri = {
       pomodoroCycles?: number | null;
       actionPath?: string | null;
       actionArgs?: string | null;
+      webhookUrl?: string | null;
     },
   ) =>
     invoke<void>('start_timer', {
@@ -72,6 +73,7 @@ export const tauri = {
       pomodoroCycles: options?.pomodoroCycles ?? null,
       actionPath: options?.actionPath ?? null,
       actionArgs: options?.actionArgs ?? null,
+      webhookUrl: options?.webhookUrl ?? null,
     }),
 
   pauseTimer: (noteId: string) => invoke<void>('pause_timer', { noteId }),

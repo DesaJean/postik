@@ -12,7 +12,8 @@ mod window_manager;
 use storage::Storage;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_global_shortcut::Builder as GsBuilder;
 use timer::TimerEngine;
 use window_manager::WindowManager;
@@ -20,6 +21,30 @@ use window_manager::WindowManager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Single-instance: re-launches focus the running app instead of
+        // opening a second one. Required for deep-link routing on
+        // Windows/Linux (the OS launches the binary with the URL as an
+        // argv; we forward it to the already-running instance via this
+        // plugin's callback). On macOS, deep links fire as `Open URL`
+        // events which the deep-link plugin handles separately.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // The user clicked a postik:// link while the app was
+            // already running. Surface the controller and let
+            // deep-link's "on_open_url" handler do the actual work.
+            let _ = app.get_webview_window("controller").map(|w| {
+                let _ = w.show();
+                let _ = w.set_focus();
+            });
+            // Forward the URL argument to deep-link if present.
+            for arg in argv.iter().skip(1) {
+                if arg.starts_with("postik://") {
+                    if let Ok(url) = url::Url::parse(arg) {
+                        let _ = app.emit("deep-link://new-url", vec![url.to_string()]);
+                    }
+                }
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
@@ -174,10 +199,55 @@ pub fn run() {
             // matching notes (focus + system notification).
             recurring::spawn(app.handle().clone());
 
+            // Handle postik:// deep links. The supported shape today is
+            // postik://new?content=... which creates a fresh note
+            // pre-filled with the supplied content (URL-decoded).
+            let app_handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    handle_deep_link(&app_handle, &url);
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Resolve a postik:// URL into a side effect. Today only `postik://new`
+/// is supported; the `content` query param pre-fills the new note's
+/// body. Unknown paths/params are silently ignored — we never want a
+/// rogue link to crash the app.
+fn handle_deep_link(app: &tauri::AppHandle, url: &url::Url) {
+    if url.scheme() != "postik" {
+        return;
+    }
+    let host = url.host_str().unwrap_or("");
+    let path = url.path();
+    // Both `postik://new` (host=new) and `postik://new/` (path=/new)
+    // are accepted to be tolerant of how clients construct the URL.
+    if host != "new" && !path.starts_with("/new") {
+        log::warn!("unhandled postik:// path: {}", url);
+        return;
+    }
+    let content = url
+        .query_pairs()
+        .find(|(k, _)| k == "content")
+        .map(|(_, v)| v.into_owned())
+        .unwrap_or_default();
+    let wm: tauri::State<WindowManager> = app.state();
+    match wm.create_new_note(app, None) {
+        Ok(note) => {
+            if !content.is_empty() {
+                let storage: tauri::State<Storage> = app.state();
+                let _ = storage.update_content(&note.id, &content);
+                // Tell any open window to reload from storage.
+                let _ = app.emit("note:content-changed", &note.id);
+            }
+        }
+        Err(e) => log::warn!("deep-link create_new_note failed: {e}"),
+    }
 }
 
 /// Spawns a tokio task that, every 15 minutes, checks if the user has

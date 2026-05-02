@@ -111,6 +111,10 @@ pub struct TimerRecord {
     /// For pomodoro: how many work cycles have completed so far.
     #[serde(default)]
     pub pomodoro_completed_cycles: Option<i64>,
+    /// Webhook URL POSTed when the timer reaches its end. `None` means
+    /// no webhook is configured.
+    #[serde(default)]
+    pub webhook_url: Option<String>,
 }
 
 #[derive(Clone)]
@@ -226,6 +230,8 @@ impl Storage {
             "ALTER TABLE timers ADD COLUMN pomodoro_completed_cycles INTEGER",
             [],
         );
+        // Webhook URL POSTed when the timer fires. NULL = no webhook.
+        let _ = conn.execute("ALTER TABLE timers ADD COLUMN webhook_url TEXT", []);
         // Notes get a nullable `event_id` so a row can be marked as backed
         // by a Google Calendar event (read-only in the UI).
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN event_id TEXT", []);
@@ -569,9 +575,10 @@ impl Storage {
                 note_id, mode, duration_seconds, elapsed_seconds, state,
                 pomodoro_phase, started_at,
                 post_action_path, post_action_args,
-                pomodoro_total_cycles, pomodoro_completed_cycles
+                pomodoro_total_cycles, pomodoro_completed_cycles,
+                webhook_url
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
              ON CONFLICT(note_id) DO UPDATE SET
                 mode = excluded.mode,
                 duration_seconds = excluded.duration_seconds,
@@ -582,7 +589,8 @@ impl Storage {
                 post_action_path = excluded.post_action_path,
                 post_action_args = excluded.post_action_args,
                 pomodoro_total_cycles = excluded.pomodoro_total_cycles,
-                pomodoro_completed_cycles = excluded.pomodoro_completed_cycles",
+                pomodoro_completed_cycles = excluded.pomodoro_completed_cycles,
+                webhook_url = excluded.webhook_url",
             params![
                 t.note_id,
                 t.mode,
@@ -595,6 +603,7 @@ impl Storage {
                 t.post_action_args,
                 t.pomodoro_total_cycles,
                 t.pomodoro_completed_cycles,
+                t.webhook_url,
             ],
         )?;
         Ok(())
@@ -607,7 +616,8 @@ impl Storage {
             "SELECT note_id, mode, duration_seconds, elapsed_seconds, state,
                     pomodoro_phase, started_at,
                     post_action_path, post_action_args,
-                    pomodoro_total_cycles, pomodoro_completed_cycles
+                    pomodoro_total_cycles, pomodoro_completed_cycles,
+                    webhook_url
              FROM timers WHERE note_id = ?1",
             [note_id],
             |r| {
@@ -623,6 +633,7 @@ impl Storage {
                     post_action_args: r.get(8)?,
                     pomodoro_total_cycles: r.get(9)?,
                     pomodoro_completed_cycles: r.get(10)?,
+                    webhook_url: r.get(11)?,
                 })
             },
         )
@@ -1075,6 +1086,7 @@ mod tests {
             post_action_args: None,
             pomodoro_total_cycles: None,
             pomodoro_completed_cycles: None,
+            webhook_url: None,
         })
         .unwrap();
         assert!(s.get_timer(&n.id).unwrap().is_some());
@@ -1099,6 +1111,7 @@ mod tests {
             post_action_args: None,
             pomodoro_total_cycles: None,
             pomodoro_completed_cycles: None,
+            webhook_url: None,
         };
         s.upsert_timer(&t).unwrap();
         t.elapsed_seconds = 30;

@@ -141,6 +141,9 @@ struct LiveTimer {
     /// Work cycles that have completed so far (incremented on Work→Break).
     pomodoro_completed_cycles: u32,
     post_action: PostAction,
+    /// Webhook URL POSTed at the same moment the post-action fires.
+    /// Stored verbatim; the engine only reads it.
+    webhook_url: Option<String>,
 }
 
 impl LiveTimer {
@@ -182,6 +185,7 @@ impl LiveTimer {
             post_action_args: self.post_action.args.clone(),
             pomodoro_total_cycles: self.pomodoro_total_cycles.map(|n| n as i64),
             pomodoro_completed_cycles: Some(self.pomodoro_completed_cycles as i64),
+            webhook_url: self.webhook_url.clone(),
         }
     }
 }
@@ -211,6 +215,7 @@ impl TimerEngine {
         duration_seconds: Option<i64>,
         pomodoro_total_cycles: Option<u32>,
         post_action: PostAction,
+        webhook_url: Option<String>,
     ) {
         let timer = LiveTimer {
             mode,
@@ -229,6 +234,7 @@ impl TimerEngine {
             },
             pomodoro_completed_cycles: 0,
             post_action,
+            webhook_url,
         };
         self.persist(&note_id, &timer);
         self.inner.lock().insert(note_id, timer);
@@ -258,21 +264,27 @@ impl TimerEngine {
         // Stopwatches don't auto-end — for them, the user clicking Cancel is
         // the natural "stop", so honour the configured post-action there.
         // For countdown/pomodoro, Cancel means abandon, so we don't fire.
-        let (had_timer, action_to_fire) = {
+        let (had_timer, action_to_fire, webhook_to_fire) = {
             let mut map = self.inner.lock();
-            let action = map.get(note_id).and_then(|t| {
-                if t.mode == TimerMode::Stopwatch {
-                    Some(t.post_action.clone())
-                } else {
-                    None
-                }
-            });
+            let (action, webhook) = map
+                .get(note_id)
+                .map(|t| {
+                    if t.mode == TimerMode::Stopwatch {
+                        (Some(t.post_action.clone()), t.webhook_url.clone())
+                    } else {
+                        (None, None)
+                    }
+                })
+                .unwrap_or((None, None));
             let existed = map.remove(note_id).is_some();
-            (existed, action)
+            (existed, action, webhook)
         };
         let _ = self.storage.delete_timer(note_id);
         if let Some(action) = action_to_fire {
             action.fire();
+        }
+        if let Some(url) = webhook_to_fire {
+            fire_webhook(url, note_id.to_string(), "stopwatch");
         }
         // Tell every open window the timer is gone so any chime / Done UI
         // bound to this note shuts down. Without this, dismissing the
@@ -313,6 +325,11 @@ impl TimerEngine {
                 let mut to_emit_done: Vec<(String, TimerMode, Option<PomodoroPhase>, String)> =
                     Vec::new();
                 let mut actions_to_fire: Vec<PostAction> = Vec::new();
+                // (webhook_url, note_id, mode_string) tuples gathered
+                // alongside the post-actions. We fire them after the
+                // mutex guard drops so a slow HTTP call can't block the
+                // tick loop.
+                let mut webhooks_to_fire: Vec<(String, String, &'static str)> = Vec::new();
                 {
                     let mut map = inner.lock();
                     for (note_id, t) in map.iter_mut() {
@@ -346,6 +363,13 @@ impl TimerEngine {
                                             preview_for(&storage, note_id),
                                         ));
                                         actions_to_fire.push(t.post_action.clone());
+                                        if let Some(url) = t.webhook_url.as_deref() {
+                                            webhooks_to_fire.push((
+                                                url.to_string(),
+                                                note_id.clone(),
+                                                "countdown",
+                                            ));
+                                        }
                                     }
                                 }
                             }
@@ -391,6 +415,13 @@ impl TimerEngine {
                                         // Done and surface a Dismiss button.
                                         t.state = TimerState::Done;
                                         actions_to_fire.push(t.post_action.clone());
+                                        if let Some(url) = t.webhook_url.as_deref() {
+                                            webhooks_to_fire.push((
+                                                url.to_string(),
+                                                note_id.clone(),
+                                                "pomodoro",
+                                            ));
+                                        }
                                     } else {
                                         let next = match phase {
                                             PomodoroPhase::Work => PomodoroPhase::Break,
@@ -432,9 +463,40 @@ impl TimerEngine {
                 for action in actions_to_fire {
                     action.fire();
                 }
+                for (url, note_id, mode) in webhooks_to_fire {
+                    fire_webhook(url, note_id, mode);
+                }
             }
         });
     }
+}
+
+/// Fire a one-shot webhook POST. Spawned as a tokio task so a slow or
+/// unreachable endpoint can't stall the tick loop. Errors are logged.
+fn fire_webhook(url: String, note_id: String, mode: &'static str) {
+    tauri::async_runtime::spawn(async move {
+        let body = serde_json::json!({
+            "note_id": note_id,
+            "mode": mode,
+            "fired_at": chrono::Utc::now().timestamp(),
+        });
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build();
+        let Ok(client) = client else {
+            log::warn!("webhook: reqwest client build failed");
+            return;
+        };
+        match client.post(&url).json(&body).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if !status.is_success() {
+                    log::warn!("webhook: {} returned {}", url, status);
+                }
+            }
+            Err(e) => log::warn!("webhook: {} failed: {}", url, e),
+        }
+    });
 }
 
 fn preview_for(storage: &Storage, note_id: &str) -> String {

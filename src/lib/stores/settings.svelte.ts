@@ -9,6 +9,7 @@ export const SETTING_KEYS = {
   lastTimerPreset: 'last_timer_preset',
   lastActionPath: 'last_action_path',
   lastActionArgs: 'last_action_args',
+  lastWebhookUrl: 'last_webhook_url',
   lastPomodoroCycles: 'last_pomodoro_cycles',
   googleCalendarAutoSync: 'google_calendar_auto_sync',
   pomodoroAutoStart: 'pomodoro_auto_start',
@@ -21,6 +22,7 @@ const DEFAULTS = {
   lastTimerPreset: '' as string,
   lastActionPath: '' as string,
   lastActionArgs: '' as string,
+  lastWebhookUrl: '' as string,
   lastPomodoroCycles: 4 as number,
   googleCalendarAutoSync: false,
   pomodoroAutoStart: true,
@@ -40,6 +42,7 @@ class SettingsStore {
   lastTimerPreset = $state<string>(DEFAULTS.lastTimerPreset);
   lastActionPath = $state<string>(DEFAULTS.lastActionPath);
   lastActionArgs = $state<string>(DEFAULTS.lastActionArgs);
+  lastWebhookUrl = $state<string>(DEFAULTS.lastWebhookUrl);
   lastPomodoroCycles = $state<number>(DEFAULTS.lastPomodoroCycles);
   googleCalendarAutoSync = $state<boolean>(DEFAULTS.googleCalendarAutoSync);
   pomodoroAutoStart = $state<boolean>(DEFAULTS.pomodoroAutoStart);
@@ -60,6 +63,7 @@ class SettingsStore {
       this.lastTimerPreset = map.get(SETTING_KEYS.lastTimerPreset) ?? DEFAULTS.lastTimerPreset;
       this.lastActionPath = map.get(SETTING_KEYS.lastActionPath) ?? DEFAULTS.lastActionPath;
       this.lastActionArgs = map.get(SETTING_KEYS.lastActionArgs) ?? DEFAULTS.lastActionArgs;
+      this.lastWebhookUrl = map.get(SETTING_KEYS.lastWebhookUrl) ?? DEFAULTS.lastWebhookUrl;
       this.lastPomodoroCycles = parseCycles(map.get(SETTING_KEYS.lastPomodoroCycles));
       this.googleCalendarAutoSync = bool(
         map.get(SETTING_KEYS.googleCalendarAutoSync),
@@ -111,6 +115,11 @@ class SettingsStore {
     await tauri.setSetting(SETTING_KEYS.lastActionArgs, value);
   }
 
+  async setLastWebhookUrl(value: string) {
+    this.lastWebhookUrl = value;
+    await tauri.setSetting(SETTING_KEYS.lastWebhookUrl, value);
+  }
+
   async setLastPomodoroCycles(value: number) {
     this.lastPomodoroCycles = value;
     await tauri.setSetting(SETTING_KEYS.lastPomodoroCycles, String(value));
@@ -139,6 +148,8 @@ class SettingsStore {
       this.lastActionPath = value;
     } else if (key === SETTING_KEYS.lastActionArgs) {
       this.lastActionArgs = value;
+    } else if (key === SETTING_KEYS.lastWebhookUrl) {
+      this.lastWebhookUrl = value;
     } else if (key === SETTING_KEYS.lastPomodoroCycles) {
       this.lastPomodoroCycles = parseCycles(value);
     } else if (key === SETTING_KEYS.googleCalendarAutoSync) {
