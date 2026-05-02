@@ -103,6 +103,21 @@
         />
       </div>
 
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Auto-start next pomodoro phase</div>
+          <div class="row-helper">
+            When on, pomodoro phases roll work → break → work without pausing. Off pauses at each
+            boundary so you can acknowledge before the next phase begins.
+          </div>
+        </div>
+        <Switch
+          checked={settingsStore.pomodoroAutoStart}
+          onChange={(v) => settingsStore.setPomodoroAutoStart(v)}
+          label="Auto-start next pomodoro phase"
+        />
+      </div>
+
       {#if settingsStore.soundOnTimerEnd}
         <div class="sound-row">
           <div class="row-label sound-row-label">Chime</div>

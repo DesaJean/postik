@@ -23,6 +23,9 @@ export const tauri = {
   updateNoteTextColor: (noteId: string, textColor: TextColorId | null) =>
     invoke<void>('update_note_text_color', { noteId, textColor }),
 
+  updateNoteTags: (noteId: string, tags: string | null) =>
+    invoke<void>('update_note_tags', { noteId, tags }),
+
   updateNoteOpacity: (noteId: string, opacity: number) =>
     invoke<void>('update_note_opacity', { noteId, opacity }),
 
@@ -35,6 +38,9 @@ export const tauri = {
   toggleAlwaysOnTop: (noteId: string) => invoke<boolean>('toggle_always_on_top', { noteId }),
 
   deleteNote: (noteId: string) => invoke<void>('delete_note', { noteId }),
+  archiveNote: (noteId: string) => invoke<void>('archive_note', { noteId }),
+  unarchiveNote: (noteId: string) => invoke<void>('unarchive_note', { noteId }),
+  listArchivedNotes: () => invoke<NoteConfig[]>('list_archived_notes'),
 
   listNotes: () => invoke<NoteConfig[]>('list_notes'),
 

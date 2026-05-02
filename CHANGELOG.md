@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-01
+
+### Added — organisation
+
+- **Archive (soft delete)** (B3). The trash icon now archives instead of
+  permanently deleting. Archived notes live in a "View archived" section
+  reachable from a footer link in the Notes pane. From there you can
+  Restore or Delete forever (with confirmation).
+- **Auto-start next pomodoro phase** (C5). New Settings toggle
+  "Auto-start next pomodoro phase" (Settings → Playback). When off, the
+  timer pauses at each phase boundary so you can acknowledge before the
+  next phase begins; defaults on (preserves existing behaviour).
+- **Snap zones** (E3). `⌘`/`Ctrl` + `Shift` + `←/→/↑/↓` snaps the
+  current note window to half the screen along that edge.
+- **Tags / labels per note** (B1). New "Tags" section at the bottom of
+  the appearance popover. Type a tag and press Enter (or comma) to add;
+  click × on a chip to remove. Tags are lowercase and deduplicated.
+  The Notes tab shows a chip row of all distinct tags above the search;
+  clicking a tag filters the list.
+
 ## [0.3.0] - 2026-05-01
 
 ### Added — content layer

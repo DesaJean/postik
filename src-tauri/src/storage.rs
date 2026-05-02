@@ -41,6 +41,10 @@ pub struct NoteRecord {
     /// `event_id = None`.
     #[serde(default)]
     pub event_id: Option<String>,
+    /// Comma-separated lowercase tag list. `None` and empty string both
+    /// mean untagged. The frontend splits/joins; storage stays flat.
+    #[serde(default)]
+    pub tags: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +208,14 @@ impl Storage {
         // reorder. After a reorder, every visible row gets an explicit
         // index.
         let _ = conn.execute("ALTER TABLE notes ADD COLUMN sort_index INTEGER", []);
+        // Soft-delete: NULL = active, non-NULL = archived-at timestamp.
+        // The list_notes query filters archived rows out by default; the
+        // archive view uses list_archived_notes.
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN archived_at INTEGER", []);
+        // Tags as a comma-separated lowercase string (`work,1on1,urgent`).
+        // Empty string and NULL are equivalent — both mean "untagged".
+        // Frontend handles parsing/joining; storage stays flat.
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN tags TEXT", []);
         Ok(())
     }
 
@@ -230,14 +242,16 @@ impl Storage {
             updated_at: now,
             text_color: None,
             event_id: None,
+            tags: None,
         })
     }
 
     pub fn list_notes(&self) -> Result<Vec<NoteRecord>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags
              FROM notes
+             WHERE archived_at IS NULL
              ORDER BY
                CASE WHEN sort_index IS NULL THEN 1 ELSE 0 END,
                sort_index ASC,
@@ -258,6 +272,7 @@ impl Storage {
                 updated_at: r.get(10)?,
                 text_color: r.get(11)?,
                 event_id: r.get(12)?,
+                tags: r.get(13)?,
             })
         })?;
         let mut out = Vec::new();
@@ -270,7 +285,7 @@ impl Storage {
     pub fn get_note(&self, id: &str) -> Result<Option<NoteRecord>> {
         let conn = self.conn.lock();
         conn.query_row(
-            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags
              FROM notes WHERE id = ?1",
             [id],
             |r| {
@@ -288,6 +303,7 @@ impl Storage {
                     updated_at: r.get(10)?,
                     text_color: r.get(11)?,
                     event_id: r.get(12)?,
+                    tags: r.get(13)?,
                 })
             },
         )
@@ -311,6 +327,16 @@ impl Storage {
         conn.execute(
             "UPDATE notes SET color_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![color_id, now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_tags(&self, id: &str, tags: Option<&str>) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET tags = ?1, updated_at = ?2 WHERE id = ?3",
+            params![tags, now, id],
         )?;
         Ok(())
     }
@@ -369,6 +395,59 @@ impl Storage {
         let conn = self.conn.lock();
         conn.execute("DELETE FROM notes WHERE id = ?1", [id])?;
         Ok(())
+    }
+
+    pub fn archive_note(&self, id: &str) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET archived_at = ?1 WHERE id = ?2",
+            params![now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn unarchive_note(&self, id: &str) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE notes SET archived_at = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_archived_notes(&self) -> Result<Vec<NoteRecord>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags
+             FROM notes
+             WHERE archived_at IS NOT NULL
+             ORDER BY archived_at DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(NoteRecord {
+                id: r.get(0)?,
+                content: r.get(1)?,
+                color_id: r.get(2)?,
+                opacity: r.get(3)?,
+                always_on_top: r.get::<_, i64>(4)? != 0,
+                x: r.get(5)?,
+                y: r.get(6)?,
+                width: r.get(7)?,
+                height: r.get(8)?,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
+                text_color: r.get(11)?,
+                event_id: r.get(12)?,
+                tags: r.get(13)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     /// Assign sort_index 0..N to the notes in `ordered_ids` in array
@@ -572,6 +651,7 @@ impl Storage {
             updated_at: now,
             text_color: None,
             event_id: Some(event_id.to_string()),
+            tags: None,
         })
     }
 

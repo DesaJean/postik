@@ -24,6 +24,8 @@ export interface NoteConfig {
   /** Set when this note is backed by a Google Calendar event. The note
    * is rendered read-only and its content is synced from Google. */
   event_id: string | null;
+  /** Comma-separated lowercase tag list. `null` and `''` mean untagged. */
+  tags: string | null;
 }
 
 export interface GoogleAccountInfo {

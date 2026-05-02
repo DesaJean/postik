@@ -52,6 +52,7 @@ export const NOTE_TEMPLATES: ReadonlyArray<NoteTemplate> = [
 
 class NotesStore {
   notes = $state<NoteConfig[]>([]);
+  archived = $state<NoteConfig[]>([]);
   loading = $state(true);
 
   async load() {
@@ -62,6 +63,30 @@ class NotesStore {
     } finally {
       this.loading = false;
     }
+  }
+
+  async loadArchived() {
+    this.archived = await tauri.listArchivedNotes();
+  }
+
+  async archive(id: string) {
+    await tauri.archiveNote(id);
+    const moved = this.notes.find((n) => n.id === id);
+    this.notes = this.notes.filter((n) => n.id !== id);
+    if (moved) this.archived = [moved, ...this.archived];
+  }
+
+  async unarchive(id: string) {
+    await tauri.unarchiveNote(id);
+    const moved = this.archived.find((n) => n.id === id);
+    this.archived = this.archived.filter((n) => n.id !== id);
+    if (moved) this.notes = [moved, ...this.notes];
+  }
+
+  async deletePermanently(id: string) {
+    await tauri.deleteNote(id);
+    this.archived = this.archived.filter((n) => n.id !== id);
+    this.notes = this.notes.filter((n) => n.id !== id);
   }
 
   async create() {

@@ -6,13 +6,47 @@
     colorId: ColorId;
     opacity: number;
     textColorId: TextColorId;
+    tags: string[];
     onColorChange: (id: ColorId) => void;
     onOpacityChange: (value: number) => void;
     onTextColorChange: (id: TextColorId) => void;
+    onTagsChange: (tags: string[]) => void;
   }
 
-  let { colorId, opacity, textColorId, onColorChange, onOpacityChange, onTextColorChange }: Props =
-    $props();
+  let {
+    colorId,
+    opacity,
+    textColorId,
+    tags,
+    onColorChange,
+    onOpacityChange,
+    onTextColorChange,
+    onTagsChange,
+  }: Props = $props();
+
+  let tagInput = $state('');
+
+  function addTag() {
+    const v = tagInput.trim().toLowerCase().replace(/^#/, '').replace(/,/g, '');
+    tagInput = '';
+    if (!v) return;
+    if (tags.includes(v)) return;
+    onTagsChange([...tags, v]);
+  }
+
+  function removeTag(tag: string) {
+    onTagsChange(tags.filter((t) => t !== tag));
+  }
+
+  function onTagKey(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag();
+    } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      // Quick "delete last tag" affordance.
+      onTagsChange(tags.slice(0, -1));
+    }
+  }
 
   let paletteText = $derived(getColor(colorId).text);
 
@@ -149,6 +183,36 @@
           aria-label="Opacity"
         />
         <p class="opacity-hint">Hover a faded note to temporarily see it at 100%.</p>
+      </div>
+
+      <div class="divider" aria-hidden="true"></div>
+
+      <div class="section">
+        <div class="section-heading">Tags</div>
+        {#if tags.length > 0}
+          <div class="tag-list">
+            {#each tags as tag (tag)}
+              <span class="tag-chip">
+                #{tag}
+                <button
+                  type="button"
+                  class="tag-remove"
+                  aria-label={`Remove tag ${tag}`}
+                  onclick={() => removeTag(tag)}>×</button
+                >
+              </span>
+            {/each}
+          </div>
+        {/if}
+        <input
+          type="text"
+          class="tag-input"
+          placeholder="Add a tag…"
+          bind:value={tagInput}
+          onkeydown={onTagKey}
+          onblur={addTag}
+          aria-label="New tag"
+        />
       </div>
     </div>
   {/if}
@@ -353,6 +417,51 @@
     font-size: 9.5px;
     color: var(--text-muted);
     line-height: 1.3;
+  }
+
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 6px;
+    border-radius: 10px;
+    background: rgba(216, 90, 48, 0.12);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .tag-remove {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .tag-remove:hover {
+    background: rgba(216, 90, 48, 0.2);
+  }
+  .tag-input {
+    width: 100%;
+    height: 24px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid transparent;
+    padding: 0 8px;
+    font-size: 11px;
+    color: inherit;
+  }
+  .tag-input:focus {
+    outline: none;
+    background: white;
+    border-color: rgba(216, 90, 48, 0.4);
   }
 
   .opacity-slider {

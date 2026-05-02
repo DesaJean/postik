@@ -4,6 +4,7 @@
   import { confirm } from '@tauri-apps/plugin-dialog';
   import { notesStore, NOTE_TEMPLATES } from '../stores/notes.svelte';
   import type { NoteTemplate } from '../stores/notes.svelte';
+  import { distinctTags, parseTags } from '../utils/tags';
   import { settingsStore } from '../stores/settings.svelte';
   import { tauri } from '../utils/tauri';
   import { getColor } from '../utils/colors';
@@ -15,6 +16,9 @@
   let timersByNote = $state<Record<string, TimerTickPayload>>({});
   let view = $state<'notes' | 'settings'>('notes');
   let tab = $state<'notes' | 'calendar'>('notes');
+  // Sub-mode within Notes tab: 'active' shows the working list, 'archived'
+  // shows soft-deleted notes with Restore + Delete-forever actions.
+  let notesView = $state<'active' | 'archived'>('active');
 
   // Search across notes. Filters by content (case-insensitive substring).
   // Empty string disables filtering; the controller falls back to the
@@ -22,10 +26,19 @@
   let search = $state('');
   let searchInput: HTMLInputElement | null = $state(null);
 
+  // Tag filter: when set, the list narrows to notes with that tag.
+  // Cleared when the user clicks the same chip again or the × button.
+  let tagFilter = $state<string | null>(null);
+  let allTags = $derived(distinctTags(notesStore.notes));
+
   let filteredNotes = $derived.by(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return notesStore.notes;
-    return notesStore.notes.filter((n) => n.content.toLowerCase().includes(q));
+    let list = notesStore.notes;
+    if (tagFilter) {
+      list = list.filter((n) => parseTags(n.tags).includes(tagFilter!));
+    }
+    if (!q) return list;
+    return list.filter((n) => n.content.toLowerCase().includes(q));
   });
 
   onMount(() => {
@@ -116,15 +129,30 @@
     await notesStore.reorder(from, idx);
   }
 
-  async function deleteNote(id: string, hasContent: boolean) {
+  // The trash icon now archives (reversible). Permanent deletion is
+  // only available from the archive view, with a confirmation.
+  async function archiveNote(id: string) {
+    await notesStore.archive(id);
+  }
+
+  async function unarchiveNote(id: string) {
+    await notesStore.unarchive(id);
+  }
+
+  async function deleteForever(id: string, hasContent: boolean) {
     if (hasContent) {
-      const ok = await confirm('Delete this note? This cannot be undone.', {
-        title: 'Delete note',
+      const ok = await confirm('Permanently delete this note? This cannot be undone.', {
+        title: 'Delete forever',
         kind: 'warning',
       });
       if (!ok) return;
     }
-    await notesStore.remove(id);
+    await notesStore.deletePermanently(id);
+  }
+
+  async function openArchive() {
+    notesView = 'archived';
+    await notesStore.loadArchived();
   }
 </script>
 
@@ -172,7 +200,56 @@
         </button>
       </header>
 
-      {#if tab === 'notes'}
+      {#if tab === 'notes' && notesView === 'archived'}
+        <div class="archive-bar">
+          <button
+            class="archive-back"
+            onclick={() => (notesView = 'active')}
+            aria-label="Back to active notes"
+          >
+            ← Back
+          </button>
+          <span class="archive-title">Archived</span>
+        </div>
+        <main class="list-wrap">
+          {#if notesStore.archived.length === 0}
+            <div class="empty-state">
+              <p>No archived notes.</p>
+              <p class="muted">Notes you archive will appear here.</p>
+            </div>
+          {:else}
+            <ul class="note-list">
+              {#each notesStore.archived as note (note.id)}
+                {@const color = getColor(note.color_id)}
+                <li class="note-item">
+                  <div class="note-row archived-row">
+                    <span class="dot" style="background: {color.border};" aria-hidden="true"></span>
+                    <span class="preview">
+                      {note.content.slice(0, 40) || '(empty note)'}
+                    </span>
+                  </div>
+                  <button
+                    class="archive-action"
+                    onclick={() => unarchiveNote(note.id)}
+                    title="Restore"
+                    aria-label="Restore note"
+                  >
+                    Restore
+                  </button>
+                  <button
+                    class="archive-action danger"
+                    onclick={() => deleteForever(note.id, note.content.trim().length > 0)}
+                    title="Delete forever"
+                    aria-label="Delete forever"
+                  >
+                    Delete
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </main>
+      {:else if tab === 'notes'}
         <div class="cta-row">
           <button class="new-note-btn" onclick={newNote} aria-label="Create new note">
             <span class="plus">+</span>
@@ -191,6 +268,27 @@
             {/each}
           </div>
         </div>
+
+        {#if allTags.length > 0}
+          <div class="tag-filter-row">
+            {#each allTags as t (t)}
+              <button
+                class="tag-filter-chip"
+                class:active={tagFilter === t}
+                onclick={() => (tagFilter = tagFilter === t ? null : t)}
+              >
+                #{t}
+              </button>
+            {/each}
+            {#if tagFilter}
+              <button
+                class="tag-filter-clear"
+                onclick={() => (tagFilter = null)}
+                aria-label="Clear tag filter">×</button
+              >
+            {/if}
+          </div>
+        {/if}
 
         <div class="search-row">
           <svg class="search-icon" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
@@ -264,10 +362,10 @@
                     class="delete-btn"
                     onclick={(e) => {
                       e.stopPropagation();
-                      deleteNote(note.id, note.content.trim().length > 0);
+                      archiveNote(note.id);
                     }}
-                    aria-label="Delete note"
-                    title="Delete note"
+                    aria-label="Archive note"
+                    title="Archive (recoverable)"
                   >
                     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
                       <path
@@ -285,6 +383,9 @@
             </ul>
           {/if}
         </main>
+        <div class="archive-footer">
+          <button class="archive-link" onclick={openArchive}>View archived</button>
+        </div>
       {:else}
         <Calendar />
       {/if}
@@ -429,6 +530,102 @@
   .template-chip:hover {
     background: rgba(216, 90, 48, 0.08);
     color: var(--accent);
+  }
+
+  .archive-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .archive-back {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .archive-back:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: inherit;
+  }
+  .archive-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .archived-row {
+    flex: 1;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+  .archive-action {
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 10px;
+    font-weight: 500;
+    margin-right: 4px;
+    cursor: pointer;
+  }
+  .archive-action:hover {
+    background: rgba(216, 90, 48, 0.1);
+    color: var(--accent);
+  }
+  .archive-action.danger:hover {
+    background: rgba(216, 90, 48, 0.18);
+    color: var(--accent);
+  }
+  .archive-footer {
+    padding: 6px 12px 10px;
+    flex-shrink: 0;
+    text-align: center;
+  }
+  .archive-link {
+    font-size: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .archive-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  .tag-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 12px 6px;
+    align-items: center;
+  }
+  .tag-filter-chip {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .tag-filter-chip:hover {
+    background: rgba(216, 90, 48, 0.1);
+    color: var(--accent);
+  }
+  .tag-filter-chip.active {
+    background: var(--accent);
+    color: white;
+  }
+  .tag-filter-clear {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .tag-filter-clear:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: inherit;
   }
 
   .search-row {

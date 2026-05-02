@@ -106,8 +106,46 @@ pub fn delete_note(
 }
 
 #[tauri::command]
+pub fn update_note_tags(
+    note_id: String,
+    tags: Option<String>,
+    storage: State<Storage>,
+) -> Result<(), String> {
+    storage
+        .update_tags(&note_id, tags.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn list_notes(storage: State<Storage>) -> Result<Vec<NoteRecord>, String> {
     storage.list_notes().map_err(|e| e.to_string())
+}
+
+/// Archive a note: hides it from the active list but keeps the row.
+/// Cancels any running timer and closes the open window so the user
+/// gets immediate visual feedback.
+#[tauri::command]
+pub fn archive_note(
+    note_id: String,
+    app: AppHandle,
+    storage: State<Storage>,
+    wm: State<WindowManager>,
+    engine: State<TimerEngine>,
+) -> Result<(), String> {
+    engine.cancel(&note_id);
+    wm.close_note_window(&app, &note_id)
+        .map_err(|e| e.to_string())?;
+    storage.archive_note(&note_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn unarchive_note(note_id: String, storage: State<Storage>) -> Result<(), String> {
+    storage.unarchive_note(&note_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_archived_notes(storage: State<Storage>) -> Result<Vec<NoteRecord>, String> {
+    storage.list_archived_notes().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

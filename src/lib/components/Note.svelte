@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import {
+    currentMonitor,
+    getCurrentWindow,
+    PhysicalPosition,
+    PhysicalSize,
+  } from '@tauri-apps/api/window';
   import TitleBar from './TitleBar.svelte';
   import Timer from './Timer.svelte';
   import AppearancePopover from './AppearancePopover.svelte';
@@ -10,6 +15,7 @@
   import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
   import { normaliseUrl, toggleChecklistAt, urlAtPosition } from '../utils/textarea-actions';
   import { renderMarkdown } from '../utils/markdown';
+  import { joinTags, parseTags } from '../utils/tags';
   import { settingsStore } from '../stores/settings.svelte';
   import type {
     ColorId,
@@ -36,6 +42,7 @@
   let opacity = $state(1);
   let pinned = $state(true);
   let focusMode = $state(false);
+  let tags = $state<string[]>([]);
   // Markdown preview vs raw-text editor. Toggled from the title bar.
   // Event-backed notes default to preview because they're already
   // read-only — markdown looks nicer than raw text for an event body.
@@ -82,6 +89,7 @@
     textColorId = (found.text_color ?? 'auto') as TextColorId;
     opacity = found.opacity;
     pinned = found.always_on_top;
+    tags = parseTags(found.tags);
 
     timer = await tauri.getTimerState(noteId);
 
@@ -98,7 +106,7 @@
           pomodoro_phase: e.payload.phase,
         };
       }),
-      await listen<TimerDonePayload>('timer:done', (e) => {
+      await listen<TimerDonePayload>('timer:done', async (e) => {
         if (e.payload.note_id !== noteId) return;
         flashing = true;
         setTimeout(() => (flashing = false), 3000);
@@ -106,6 +114,14 @@
         // state — only countdowns end up "done" and need the dismiss UI.
         if (e.payload.mode === 'countdown' && timer) {
           timer = { ...timer, state: 'done', remaining_seconds: 0 };
+        }
+        // C5: when the user has auto-start OFF, pause the timer at the
+        // phase boundary so they can acknowledge before the next phase
+        // ticks. The engine has already advanced phase + reset elapsed,
+        // so resuming picks up the new phase from 0.
+        if (e.payload.mode === 'pomodoro' && !settingsStore.pomodoroAutoStart) {
+          await tauri.pauseTimer(noteId);
+          await refreshTimer();
         }
       }),
       // Backend cancels (Dismiss button, calendar bell toggle, auto-sync
@@ -186,6 +202,12 @@
     await tauri.updateNoteOpacity(noteId, v);
   }
 
+  async function changeTags(next: string[]) {
+    tags = next;
+    const joined = joinTags(next);
+    await tauri.updateNoteTags(noteId, joined === '' ? null : joined);
+  }
+
   async function togglePin() {
     pinned = await tauri.toggleAlwaysOnTop(noteId);
   }
@@ -256,6 +278,39 @@
     // its own confirmation. So no dialog needed here.
     await getCurrentWindow().hide();
   }
+
+  // Snap-to-edge: ⌘⇧← / → / ↑ / ↓ resizes and repositions the current
+  // note window to occupy half the screen. Useful for ambient layouts.
+  async function snapTo(edge: 'left' | 'right' | 'top' | 'bottom') {
+    const win = getCurrentWindow();
+    const monitor = await currentMonitor();
+    if (!monitor) return;
+    const { width, height } = monitor.size;
+    const ox = monitor.position.x;
+    const oy = monitor.position.y;
+    let x = ox;
+    let y = oy;
+    let w = width;
+    let h = height;
+    switch (edge) {
+      case 'left':
+        w = Math.floor(width / 2);
+        break;
+      case 'right':
+        x = ox + Math.floor(width / 2);
+        w = Math.ceil(width / 2);
+        break;
+      case 'top':
+        h = Math.floor(height / 2);
+        break;
+      case 'bottom':
+        y = oy + Math.floor(height / 2);
+        h = Math.ceil(height / 2);
+        break;
+    }
+    await win.setPosition(new PhysicalPosition(x, y));
+    await win.setSize(new PhysicalSize(w, h));
+  }
 </script>
 
 <svelte:window
@@ -263,6 +318,28 @@
     if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
       e.preventDefault();
       closeNote();
+      return;
+    }
+    // Snap-to-edge with ⌘⇧Arrow / Ctrl⇧Arrow.
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey) {
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          snapTo('left');
+          return;
+        case 'ArrowRight':
+          e.preventDefault();
+          snapTo('right');
+          return;
+        case 'ArrowUp':
+          e.preventDefault();
+          snapTo('top');
+          return;
+        case 'ArrowDown':
+          e.preventDefault();
+          snapTo('bottom');
+          return;
+      }
     }
   }}
 />
@@ -317,9 +394,11 @@
         {colorId}
         {opacity}
         {textColorId}
+        {tags}
         onColorChange={changeColor}
         onOpacityChange={changeOpacity}
         onTextColorChange={changeTextColor}
+        onTagsChange={changeTags}
       />
     </div>
   </div>

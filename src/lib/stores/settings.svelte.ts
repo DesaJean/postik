@@ -11,6 +11,7 @@ export const SETTING_KEYS = {
   lastActionArgs: 'last_action_args',
   lastPomodoroCycles: 'last_pomodoro_cycles',
   googleCalendarAutoSync: 'google_calendar_auto_sync',
+  pomodoroAutoStart: 'pomodoro_auto_start',
 } as const;
 
 const DEFAULTS = {
@@ -22,6 +23,7 @@ const DEFAULTS = {
   lastActionArgs: '' as string,
   lastPomodoroCycles: 4 as number,
   googleCalendarAutoSync: false,
+  pomodoroAutoStart: true,
 } as const;
 
 interface ChangedPayload {
@@ -40,6 +42,7 @@ class SettingsStore {
   lastActionArgs = $state<string>(DEFAULTS.lastActionArgs);
   lastPomodoroCycles = $state<number>(DEFAULTS.lastPomodoroCycles);
   googleCalendarAutoSync = $state<boolean>(DEFAULTS.googleCalendarAutoSync);
+  pomodoroAutoStart = $state<boolean>(DEFAULTS.pomodoroAutoStart);
   loaded = $state(false);
 
   private unlisten: UnlistenFn | null = null;
@@ -61,6 +64,10 @@ class SettingsStore {
       this.googleCalendarAutoSync = bool(
         map.get(SETTING_KEYS.googleCalendarAutoSync),
         DEFAULTS.googleCalendarAutoSync,
+      );
+      this.pomodoroAutoStart = bool(
+        map.get(SETTING_KEYS.pomodoroAutoStart),
+        DEFAULTS.pomodoroAutoStart,
       );
       this.loaded = true;
     } catch (e) {
@@ -114,6 +121,11 @@ class SettingsStore {
     await tauri.setSetting(SETTING_KEYS.googleCalendarAutoSync, String(value));
   }
 
+  async setPomodoroAutoStart(value: boolean) {
+    this.pomodoroAutoStart = value;
+    await tauri.setSetting(SETTING_KEYS.pomodoroAutoStart, String(value));
+  }
+
   private applyRemote(key: string, value: string) {
     if (key === SETTING_KEYS.privacyHideFromCapture) {
       this.privacyHideFromCapture = value === 'true';
@@ -131,6 +143,8 @@ class SettingsStore {
       this.lastPomodoroCycles = parseCycles(value);
     } else if (key === SETTING_KEYS.googleCalendarAutoSync) {
       this.googleCalendarAutoSync = value === 'true';
+    } else if (key === SETTING_KEYS.pomodoroAutoStart) {
+      this.pomodoroAutoStart = value === 'true';
     }
   }
 }
