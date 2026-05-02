@@ -96,6 +96,17 @@ export const tauri = {
       last_seven_days: Array<{ date: string; seconds: number }>;
     }>('pomodoro_stats'),
 
+  listShortcutBindings: () =>
+    invoke<Array<{ action: string; accelerator: string; default_accelerator: string }>>(
+      'list_shortcut_bindings',
+    ),
+  setShortcut: (action: string, accelerator: string) =>
+    invoke<string>('set_shortcut', { action, accelerator }),
+  resetShortcut: (action: string) => invoke<string>('reset_shortcut', { action }),
+
+  exportBackup: (path: string) => invoke<void>('export_backup', { path }),
+  importBackup: (path: string) => invoke<number>('import_backup', { path }),
+
   // Google Calendar
   googleIsConfigured: () => invoke<boolean>('google_is_configured'),
   googleConnect: () => invoke<GoogleAccountInfo>('google_connect'),

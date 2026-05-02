@@ -1,5 +1,6 @@
 use crate::google::{self, GoogleAccountInfo, SyncRange};
 use crate::launcher;
+use crate::shortcuts;
 use crate::storage::{GoogleEventRecord, NoteRecord, PomodoroDayBucket, Storage};
 use crate::timer::{PostAction, TimerEngine, TimerMode, TimerStateSnapshot};
 use crate::window_manager::{WindowManager, SETTING_PRIVACY_HIDE_FROM_CAPTURE};
@@ -241,7 +242,7 @@ pub fn get_timer_state(
     Ok(engine.snapshot(&note_id))
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, serde::Deserialize, Clone)]
 pub struct SettingPair {
     pub key: String,
     pub value: String,
@@ -302,6 +303,46 @@ pub struct PomodoroStats {
     pub last_seven_days: Vec<PomodoroDayBucket>,
 }
 
+#[derive(Serialize, Clone)]
+pub struct ShortcutBinding {
+    pub action: String,
+    pub accelerator: String,
+    pub default_accelerator: String,
+}
+
+#[tauri::command]
+pub fn list_shortcut_bindings(storage: State<Storage>) -> Result<Vec<ShortcutBinding>, String> {
+    let bindings = shortcuts::current_bindings(&storage);
+    Ok(bindings
+        .into_iter()
+        .map(|(action, accelerator)| ShortcutBinding {
+            default_accelerator: match action {
+                shortcuts::ShortcutAction::NewNote => "CmdOrCtrl+Shift+N".into(),
+                shortcuts::ShortcutAction::HideAll => "CmdOrCtrl+Shift+H".into(),
+                shortcuts::ShortcutAction::StartTimer => "CmdOrCtrl+Shift+T".into(),
+                shortcuts::ShortcutAction::TogglePin => "CmdOrCtrl+Shift+P".into(),
+            },
+            action: match action {
+                shortcuts::ShortcutAction::NewNote => "new_note".into(),
+                shortcuts::ShortcutAction::HideAll => "hide_all".into(),
+                shortcuts::ShortcutAction::StartTimer => "start_timer".into(),
+                shortcuts::ShortcutAction::TogglePin => "toggle_pin".into(),
+            },
+            accelerator,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn set_shortcut(action: String, accelerator: String, app: AppHandle) -> Result<String, String> {
+    shortcuts::set_action_accelerator(&app, &action, &accelerator)
+}
+
+#[tauri::command]
+pub fn reset_shortcut(action: String, app: AppHandle) -> Result<String, String> {
+    shortcuts::reset_action(&app, &action)
+}
+
 #[tauri::command]
 pub fn pomodoro_stats(storage: State<Storage>) -> Result<PomodoroStats, String> {
     let now = chrono::Utc::now();
@@ -325,6 +366,63 @@ pub fn pomodoro_stats(storage: State<Storage>) -> Result<PomodoroStats, String> 
         week_seconds: week,
         last_seven_days: buckets,
     })
+}
+
+#[derive(Serialize, serde::Deserialize, Clone)]
+pub struct BackupSnapshot {
+    pub version: u32,
+    pub exported_at: i64,
+    pub notes: Vec<NoteRecord>,
+    pub settings: Vec<SettingPair>,
+}
+
+/// Write a JSON snapshot of every note + every setting to `path`. The
+/// blob is verbatim restorable via `import_backup`. Google OAuth tokens,
+/// pomodoro session history, and timer engine state are intentionally
+/// excluded — re-syncing / re-running gives them back.
+#[tauri::command]
+pub fn export_backup(path: String, storage: State<Storage>) -> Result<(), String> {
+    let notes = storage
+        .list_all_notes_for_backup()
+        .map_err(|e| e.to_string())?;
+    let settings = storage
+        .list_settings()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(key, value)| SettingPair { key, value })
+        .collect();
+    let snapshot = BackupSnapshot {
+        version: 1,
+        exported_at: chrono::Utc::now().timestamp(),
+        notes,
+        settings,
+    };
+    let json = serde_json::to_string_pretty(&snapshot).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Restore a JSON snapshot from `path`, replacing the notes table and
+/// merging settings. Returns the number of notes restored.
+#[tauri::command]
+pub fn import_backup(
+    path: String,
+    app: AppHandle,
+    storage: State<Storage>,
+) -> Result<usize, String> {
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let snapshot: BackupSnapshot = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    if snapshot.version != 1 {
+        return Err(format!("unsupported backup version: {}", snapshot.version));
+    }
+    storage
+        .replace_notes(&snapshot.notes)
+        .map_err(|e| e.to_string())?;
+    for SettingPair { key, value } in &snapshot.settings {
+        storage.set_setting(key, value).map_err(|e| e.to_string())?;
+    }
+    let _ = app.emit("backup:imported", snapshot.notes.len());
+    Ok(snapshot.notes.len())
 }
 
 #[tauri::command]

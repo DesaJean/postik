@@ -5,6 +5,9 @@
   import { SOUND_CHOICES, playTimerDone, type SoundChoice } from '../utils/sound';
   import { checkForUpdate, downloadAndInstall, restart, type UpdateStatus } from '../utils/updater';
   import { tauri } from '../utils/tauri';
+  import { eventToAccelerator, prettyAccelerator } from '../utils/keybind';
+  import { confirm, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+  import { notesStore } from '../stores/notes.svelte';
 
   interface Props {
     onBack: () => void;
@@ -85,7 +88,116 @@
   async function onRestart() {
     await restart();
   }
+
+  // Custom keyboard shortcuts. Loaded on mount; each row enters
+  // "recording" mode on click and captures the next valid keypress.
+  let shortcuts = $state<
+    Array<{ action: string; accelerator: string; default_accelerator: string }>
+  >([]);
+  let recordingFor = $state<string | null>(null);
+  let shortcutError = $state<string | null>(null);
+
+  async function loadShortcuts() {
+    try {
+      shortcuts = await tauri.listShortcutBindings();
+    } catch (e) {
+      console.error('list_shortcut_bindings failed', e);
+    }
+  }
+
+  function shortcutLabel(action: string): string {
+    switch (action) {
+      case 'new_note':
+        return 'New note';
+      case 'hide_all':
+        return 'Hide / show all';
+      case 'start_timer':
+        return 'Start timer';
+      case 'toggle_pin':
+        return 'Toggle pin (focused note)';
+      default:
+        return action;
+    }
+  }
+
+  async function onRecordKey(e: KeyboardEvent) {
+    if (!recordingFor) return;
+    e.preventDefault();
+    if (e.key === 'Escape') {
+      recordingFor = null;
+      shortcutError = null;
+      return;
+    }
+    const accel = eventToAccelerator(e);
+    if (!accel) return;
+    try {
+      await tauri.setShortcut(recordingFor, accel);
+      shortcuts = shortcuts.map((s) =>
+        s.action === recordingFor ? { ...s, accelerator: accel } : s,
+      );
+      recordingFor = null;
+      shortcutError = null;
+    } catch (err) {
+      shortcutError = String(err);
+    }
+  }
+
+  async function resetShortcut(action: string) {
+    try {
+      const def = await tauri.resetShortcut(action);
+      shortcuts = shortcuts.map((s) => (s.action === action ? { ...s, accelerator: def } : s));
+    } catch (e) {
+      shortcutError = String(e);
+    }
+  }
+
+  onMount(loadShortcuts);
+
+  // Backup export / import. The user picks a path; we forward to Rust.
+  let backupStatus = $state<string | null>(null);
+
+  async function onExportBackup() {
+    backupStatus = null;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const path = await saveDialog({
+        defaultPath: `postik-backup-${today}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (!path) return;
+      await tauri.exportBackup(path);
+      backupStatus = `Exported to ${path}`;
+    } catch (e) {
+      backupStatus = `Export failed: ${e}`;
+    }
+  }
+
+  async function onImportBackup() {
+    backupStatus = null;
+    const ok = await confirm(
+      'Importing replaces every note in this Postik install with the backup. Continue?',
+      { title: 'Import backup', kind: 'warning' },
+    );
+    if (!ok) return;
+    try {
+      const path = await openDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (!path || typeof path !== 'string') return;
+      const count = await tauri.importBackup(path);
+      backupStatus = `Imported ${count} notes`;
+      // Refresh the controller's local note list so the UI reflects the
+      // new state without a manual reload.
+      await notesStore.load();
+    } catch (e) {
+      backupStatus = `Import failed: ${e}`;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onRecordKey} />
 
 <div class="settings-view">
   <header class="header">
@@ -213,6 +325,72 @@
         </div>
       {:else}
         <p class="row-helper" style="padding: 0 16px 12px">Loading…</p>
+      {/if}
+    </section>
+
+    <section>
+      <h2 class="section-heading">Keyboard shortcuts</h2>
+      <p class="row-helper" style="padding: 0 16px 8px">
+        Click a binding to record a new keystroke. Hit Esc to cancel.
+      </p>
+      {#each shortcuts as s (s.action)}
+        <div class="row shortcut-row">
+          <div class="row-text">
+            <div class="row-label">{shortcutLabel(s.action)}</div>
+          </div>
+          <button
+            class="shortcut-btn"
+            class:recording={recordingFor === s.action}
+            onclick={() => (recordingFor = recordingFor === s.action ? null : s.action)}
+          >
+            {#if recordingFor === s.action}
+              Press a key…
+            {:else}
+              {prettyAccelerator(s.accelerator)}
+            {/if}
+          </button>
+          {#if s.accelerator !== s.default_accelerator}
+            <button
+              class="reset-btn"
+              onclick={() => resetShortcut(s.action)}
+              title="Reset to default"
+              aria-label="Reset to default"
+            >
+              ↺
+            </button>
+          {/if}
+        </div>
+      {/each}
+      {#if shortcutError}
+        <p class="row-helper" style="padding: 0 16px 8px; color: var(--accent)">
+          {shortcutError}
+        </p>
+      {/if}
+    </section>
+
+    <section>
+      <h2 class="section-heading">Backup</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Export all notes</div>
+          <div class="row-helper">
+            Saves a JSON snapshot with every note (active + archived), tags, recurring schedules,
+            and settings. Google tokens and pomodoro history are not included.
+          </div>
+        </div>
+        <button class="update-btn" onclick={onExportBackup}>Export…</button>
+      </div>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Import backup</div>
+          <div class="row-helper">
+            Replaces every note with the snapshot. Settings are merged in.
+          </div>
+        </div>
+        <button class="update-btn" onclick={onImportBackup}>Import…</button>
+      </div>
+      {#if backupStatus}
+        <p class="row-helper" style="padding: 0 16px 12px">{backupStatus}</p>
       {/if}
     </section>
 
@@ -462,6 +640,56 @@
   .stats-bar-label.current {
     color: var(--accent);
     font-weight: 600;
+  }
+
+  .shortcut-row {
+    align-items: center;
+    gap: 6px;
+  }
+  .shortcut-btn {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 11px;
+    font-weight: 600;
+    color: inherit;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    min-width: 84px;
+    text-align: center;
+  }
+  .shortcut-btn:hover {
+    background: rgba(216, 90, 48, 0.12);
+    color: var(--accent);
+  }
+  .shortcut-btn.recording {
+    background: var(--accent);
+    color: white;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  .reset-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .reset-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: inherit;
   }
 
   .update-btn {

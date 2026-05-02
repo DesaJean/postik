@@ -656,6 +656,80 @@ impl Storage {
         Ok(())
     }
 
+    /// Wholesale snapshot of every note (active + archived) for backup
+    /// purposes. Distinct from `list_notes` which filters archived.
+    pub fn list_all_notes_for_backup(&self) -> Result<Vec<NoteRecord>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, content, color_id, opacity, always_on_top, x, y, width, height, created_at, updated_at, text_color, event_id, tags, recurring_rule, recurring_last_fired
+             FROM notes",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(NoteRecord {
+                id: r.get(0)?,
+                content: r.get(1)?,
+                color_id: r.get(2)?,
+                opacity: r.get(3)?,
+                always_on_top: r.get::<_, i64>(4)? != 0,
+                x: r.get(5)?,
+                y: r.get(6)?,
+                width: r.get(7)?,
+                height: r.get(8)?,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
+                text_color: r.get(11)?,
+                event_id: r.get(12)?,
+                tags: r.get(13)?,
+                recurring_rule: r.get(14)?,
+                recurring_last_fired: r.get(15)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Replace the entire notes table with the supplied set. Used by
+    /// import_backup to atomically restore a snapshot. Run inside a
+    /// transaction so a partial failure doesn't half-rebuild the
+    /// table.
+    pub fn replace_notes(&self, notes: &[NoteRecord]) -> Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM notes", [])?;
+        for n in notes {
+            tx.execute(
+                "INSERT INTO notes (
+                    id, content, color_id, opacity, always_on_top, x, y, width, height,
+                    created_at, updated_at, text_color, event_id, tags,
+                    recurring_rule, recurring_last_fired
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                params![
+                    n.id,
+                    n.content,
+                    n.color_id,
+                    n.opacity,
+                    n.always_on_top as i64,
+                    n.x,
+                    n.y,
+                    n.width,
+                    n.height,
+                    n.created_at,
+                    n.updated_at,
+                    n.text_color,
+                    n.event_id,
+                    n.tags,
+                    n.recurring_rule,
+                    n.recurring_last_fired,
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn list_settings(&self) -> Result<Vec<(String, String)>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare("SELECT key, value FROM settings")?;

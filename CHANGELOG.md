@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-02
+
+### Added — customisation & ops
+
+- **Custom global shortcuts** (E1). Settings → Keyboard shortcuts lets
+  you rebind the four globals (new note, hide/show all, start timer,
+  toggle pin). Click a binding to record a new keystroke; Esc cancels.
+  Reset-to-default arrow appears when a binding is customised. Bindings
+  use `CmdOrCtrl` so the same recorded combo works on both macOS and
+  Windows.
+- **Backup export / import** (D2). Settings → Backup. Export writes a
+  JSON snapshot of every note (active + archived), tags, recurring
+  schedules, and settings. Import replaces the notes table from a
+  snapshot (with a confirmation prompt). Google OAuth tokens, pomodoro
+  history, and runtime timer state are excluded.
+- 7 new unit tests (`keybind.test.ts`) cover keystroke → accelerator
+  parsing across letters, function keys, arrows, modifiers, and the
+  pretty-print mac/non-mac output.
+
 ## [0.5.0] - 2026-05-02
 
 ### Added — timer power features
