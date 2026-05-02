@@ -16,7 +16,26 @@ export type UpdateStatus =
   | { kind: 'error'; message: string };
 
 export async function checkForUpdate(): Promise<Update | null> {
-  return check();
+  try {
+    return await check();
+  } catch (e) {
+    const msg = String(e);
+    // The updater plugin throws when the endpoint returns a non-2xx
+    // (typical case: no published release yet, GitHub serves a 404
+    // for the `latest/download/latest.json` URL). Treat that as
+    // "nothing to install" rather than surfacing a scary error to
+    // the user. Real failures (DNS, malformed JSON, signature
+    // mismatch) still propagate.
+    if (
+      msg.includes('did not respond with a successful status code') ||
+      msg.includes('status code: 404') ||
+      msg.includes('Network Error')
+    ) {
+      console.warn('updater endpoint not reachable; treating as up-to-date:', msg);
+      return null;
+    }
+    throw e;
+  }
 }
 
 export async function downloadAndInstall(
