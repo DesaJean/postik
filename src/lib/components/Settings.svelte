@@ -369,6 +369,30 @@
     </section>
 
     <section>
+      <h2 class="section-heading">Focus</h2>
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Blocked hosts during pomodoro</div>
+          <div class="row-helper">
+            One host per line (e.g. <code>youtube.com</code>). Postik prompts before opening a
+            matching URL while a pomodoro work session is running. Acts on URLs Postik opens (note
+            links, post-timer actions) — it can't block your browser directly.
+          </div>
+        </div>
+      </div>
+      <div class="row" style="padding-top: 0">
+        <textarea
+          class="hosts-area"
+          placeholder="youtube.com&#10;reddit.com&#10;twitter.com"
+          value={settingsStore.focusBlockedHosts}
+          oninput={(e) =>
+            settingsStore.setFocusBlockedHosts((e.currentTarget as HTMLTextAreaElement).value)}
+          aria-label="Blocked hosts"
+        ></textarea>
+      </div>
+    </section>
+
+    <section>
       <h2 class="section-heading">Backup</h2>
       <div class="row">
         <div class="row-text">
@@ -690,6 +714,24 @@
   .reset-btn:hover {
     background: rgba(0, 0, 0, 0.05);
     color: inherit;
+  }
+  .hosts-area {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px 12px;
+    margin: 0 16px;
+    border-radius: 5px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(0, 0, 0, 0.03);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px;
+    color: inherit;
+    resize: vertical;
+  }
+  .hosts-area:focus {
+    outline: none;
+    border-color: rgba(216, 90, 48, 0.4);
+    background: rgba(0, 0, 0, 0.01);
   }
 
   .update-btn {

@@ -338,10 +338,49 @@ pub fn set_setting(
 /// Open a URL or file in the user's default handler. Used by the
 /// in-note "click on a link with ⌘/Ctrl held" feature so notes can act
 /// as launch surfaces without us having to bundle a separate plugin.
+///
+/// During an active pomodoro work session, hosts the user has marked
+/// as "blocked" return a special error so the frontend can show an
+/// override prompt rather than opening silently.
 #[tauri::command]
-pub fn open_url(url: String) -> Result<(), String> {
+pub fn open_url(
+    url: String,
+    storage: State<Storage>,
+    engine: State<TimerEngine>,
+) -> Result<(), String> {
+    if engine.is_any_pomodoro_in_work() {
+        if let Some(host) = host_of(&url) {
+            let blocked = storage
+                .get_setting("focus_blocked_hosts")
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            if blocked
+                .lines()
+                .map(|l| l.trim().to_lowercase())
+                .filter(|l| !l.is_empty())
+                .any(|pattern| host.contains(&pattern))
+            {
+                return Err(format!("blocked_during_focus:{host}"));
+            }
+        }
+    }
     launcher::launch(None, Some(&url));
     Ok(())
+}
+
+/// Bypass the distraction blocker. Frontend calls this after the user
+/// confirms they want to open the URL anyway.
+#[tauri::command]
+pub fn open_url_force(url: String) -> Result<(), String> {
+    launcher::launch(None, Some(&url));
+    Ok(())
+}
+
+fn host_of(url: &str) -> Option<String> {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|s| s.to_lowercase()))
 }
 
 #[derive(Serialize, Clone)]

@@ -91,6 +91,7 @@ pub fn run() {
             commands::set_setting,
             commands::list_settings,
             commands::open_url,
+            commands::open_url_force,
             commands::pomodoro_stats,
             commands::list_shortcut_bindings,
             commands::set_shortcut,

@@ -15,6 +15,7 @@
   import { startTimerDoneLoop, stopTimerDoneLoop } from '../utils/sound';
   import { normaliseUrl, toggleChecklistAt, urlAtPosition } from '../utils/textarea-actions';
   import { renderMarkdown } from '../utils/markdown';
+  import { safeOpenUrl } from '../utils/safe-open';
   import { joinTags, parseTags } from '../utils/tags';
   import { settingsStore } from '../stores/settings.svelte';
   import type {
@@ -220,7 +221,7 @@
       const url = urlAtPosition(content, pos);
       if (url) {
         e.preventDefault();
-        await tauri.openUrl(normaliseUrl(url));
+        await safeOpenUrl(normaliseUrl(url));
         return;
       }
     }
@@ -288,7 +289,7 @@
       const href = (target as HTMLAnchorElement).getAttribute('href');
       if (href) {
         e.preventDefault();
-        await tauri.openUrl(href);
+        await safeOpenUrl(href);
       }
       return;
     }

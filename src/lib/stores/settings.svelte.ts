@@ -13,6 +13,7 @@ export const SETTING_KEYS = {
   lastPomodoroCycles: 'last_pomodoro_cycles',
   googleCalendarAutoSync: 'google_calendar_auto_sync',
   pomodoroAutoStart: 'pomodoro_auto_start',
+  focusBlockedHosts: 'focus_blocked_hosts',
 } as const;
 
 const DEFAULTS = {
@@ -26,6 +27,7 @@ const DEFAULTS = {
   lastPomodoroCycles: 4 as number,
   googleCalendarAutoSync: false,
   pomodoroAutoStart: true,
+  focusBlockedHosts: '' as string,
 } as const;
 
 interface ChangedPayload {
@@ -46,6 +48,7 @@ class SettingsStore {
   lastPomodoroCycles = $state<number>(DEFAULTS.lastPomodoroCycles);
   googleCalendarAutoSync = $state<boolean>(DEFAULTS.googleCalendarAutoSync);
   pomodoroAutoStart = $state<boolean>(DEFAULTS.pomodoroAutoStart);
+  focusBlockedHosts = $state<string>(DEFAULTS.focusBlockedHosts);
   loaded = $state(false);
 
   private unlisten: UnlistenFn | null = null;
@@ -73,6 +76,8 @@ class SettingsStore {
         map.get(SETTING_KEYS.pomodoroAutoStart),
         DEFAULTS.pomodoroAutoStart,
       );
+      this.focusBlockedHosts =
+        map.get(SETTING_KEYS.focusBlockedHosts) ?? DEFAULTS.focusBlockedHosts;
       this.loaded = true;
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -135,6 +140,11 @@ class SettingsStore {
     await tauri.setSetting(SETTING_KEYS.pomodoroAutoStart, String(value));
   }
 
+  async setFocusBlockedHosts(value: string) {
+    this.focusBlockedHosts = value;
+    await tauri.setSetting(SETTING_KEYS.focusBlockedHosts, value);
+  }
+
   private applyRemote(key: string, value: string) {
     if (key === SETTING_KEYS.privacyHideFromCapture) {
       this.privacyHideFromCapture = value === 'true';
@@ -156,6 +166,8 @@ class SettingsStore {
       this.googleCalendarAutoSync = value === 'true';
     } else if (key === SETTING_KEYS.pomodoroAutoStart) {
       this.pomodoroAutoStart = value === 'true';
+    } else if (key === SETTING_KEYS.focusBlockedHosts) {
+      this.focusBlockedHosts = value;
     }
   }
 }

@@ -306,6 +306,17 @@ impl TimerEngine {
         self.inner.lock().get(note_id).map(|t| t.snapshot(note_id))
     }
 
+    /// True when at least one running pomodoro is currently in its
+    /// Work phase. Used by the distraction blocker (C4) to decide
+    /// whether to warn before opening a blocked URL.
+    pub fn is_any_pomodoro_in_work(&self) -> bool {
+        self.inner.lock().values().any(|t| {
+            t.mode == TimerMode::Pomodoro
+                && t.state == TimerState::Running
+                && t.pomodoro_phase == Some(PomodoroPhase::Work)
+        })
+    }
+
     fn persist(&self, note_id: &str, t: &LiveTimer) {
         let started_at = Some(chrono::Utc::now().timestamp());
         if let Err(e) = self.storage.upsert_timer(&t.to_record(note_id, started_at)) {

@@ -100,6 +100,7 @@ export const tauri = {
   listSettings: () => invoke<Array<{ key: string; value: string }>>('list_settings'),
 
   openUrl: (url: string) => invoke<void>('open_url', { url }),
+  openUrlForce: (url: string) => invoke<void>('open_url_force', { url }),
 
   pomodoroStats: () =>
     invoke<{

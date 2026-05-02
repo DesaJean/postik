@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-02
+
+### Added — distraction blocker (lightweight)
+
+- **Focus blocker** (C4 v1). Settings → Focus exposes a textarea for
+  blocked hosts (one per line). When a pomodoro work session is
+  running, opening a URL via Postik (note ⌘+click, post-timer
+  action) whose host matches a blocked entry triggers a "Stay
+  focused?" confirmation prompt. The user can override or cancel.
+
+### Notes
+
+- This is a soft block. It only intercepts URLs Postik itself opens —
+  it can't block your browser directly (that needs OS-level network
+  rules / proxy config beyond Postik's local-first scope). Useful as
+  a friction layer; not a substitute for Cold Turkey or LeechBlock.
+
 ## [0.8.0] - 2026-05-02
 
 ### Added — bigger swings
