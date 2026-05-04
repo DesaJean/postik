@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-05-03
+
+### Added — Arrange notes by stack
+
+- **Arrange button** on the controller's Notes tab. Clicking it tiles
+  every visible note window into a grid on the primary monitor,
+  grouped by stack. Stacks lay out top-to-bottom in their stored
+  sort order; unstacked notes go last. Within a stack, notes flow
+  left-to-right and wrap at the screen's right edge, with a larger
+  vertical gap between groups so the grouping is visually obvious.
+- Each note keeps its existing width/height — only positions move.
+  The new layout persists to storage so the notes return to the
+  arranged positions after a restart.
+
+### Notes
+
+- Useful when notes drift around the screen during the day. One
+  click puts them back in a tidy grid that mirrors how the stacks
+  are organised in the controller.
+
 ## [0.12.0] - 2026-04-30
 
 ### Added — Stacks UI (B5 follow-up)

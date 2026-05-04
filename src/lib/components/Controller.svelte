@@ -107,6 +107,18 @@
     await notesStore.createFromTemplate(id);
   }
 
+  // Tile every note window into a grid grouped by stack. Optimistically
+  // refreshes the local list afterwards so the controller's positions
+  // (used by the next drag-to-reorder) reflect what's now on screen.
+  async function arrangeNotes() {
+    try {
+      await tauri.arrangeNotes();
+      await notesStore.load();
+    } catch (e) {
+      console.error('arrange_notes failed', e);
+    }
+  }
+
   // Drag-to-reorder. We only enable it when search is empty: filtering +
   // reordering at the same time would yield surprising indices because
   // the user-visible order doesn't match the underlying notesStore.notes
@@ -279,6 +291,20 @@
               </button>
             {/each}
           </div>
+          <button
+            class="arrange-btn"
+            onclick={arrangeNotes}
+            title="Arrange notes by stack on screen"
+            aria-label="Arrange notes"
+          >
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <rect x="2" y="2" width="5" height="5" fill="currentColor" rx="1" />
+              <rect x="9" y="2" width="5" height="5" fill="currentColor" rx="1" />
+              <rect x="2" y="9" width="5" height="5" fill="currentColor" rx="1" />
+              <rect x="9" y="9" width="5" height="5" fill="currentColor" rx="1" />
+            </svg>
+            <span>Arrange</span>
+          </button>
         </div>
 
         {#if stacksStore.stacks.length > 0}
@@ -573,6 +599,29 @@
       color 120ms ease-out;
   }
   .template-chip:hover {
+    background: rgba(216, 90, 48, 0.08);
+    color: var(--accent);
+  }
+
+  .arrange-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    height: 24px;
+    margin-top: 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+  .arrange-btn:hover {
     background: rgba(216, 90, 48, 0.08);
     color: var(--accent);
   }

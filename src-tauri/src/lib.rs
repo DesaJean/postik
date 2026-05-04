@@ -82,6 +82,7 @@ pub fn run() {
             commands::hide_all_notes,
             commands::show_all_notes,
             commands::focus_only_note,
+            commands::arrange_notes,
             commands::start_timer,
             commands::pause_timer,
             commands::resume_timer,

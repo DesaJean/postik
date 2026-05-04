@@ -237,6 +237,11 @@ pub fn show_all_notes(app: AppHandle, wm: State<WindowManager>) -> Result<(), St
     wm.show_all_notes(&app).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn arrange_notes(app: AppHandle, wm: State<WindowManager>) -> Result<(), String> {
+    wm.arrange_notes(&app).map_err(|e| e.to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn start_timer(

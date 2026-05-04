@@ -64,6 +64,7 @@ export const tauri = {
   hideAllNotes: () => invoke<void>('hide_all_notes'),
   showAllNotes: () => invoke<void>('show_all_notes'),
   focusOnlyNote: (noteId: string) => invoke<void>('focus_only_note', { noteId }),
+  arrangeNotes: () => invoke<void>('arrange_notes'),
 
   startTimer: (
     noteId: string,

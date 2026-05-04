@@ -358,6 +358,101 @@ impl WindowManager {
         }
     }
 
+    /// Tile every visible note window into a grid on the primary monitor,
+    /// grouped by stack. Stacks are laid out top-to-bottom in their stored
+    /// `sort_index` order; unstacked notes go last. Within a stack, notes
+    /// flow left-to-right and wrap at the screen's right edge. A larger
+    /// vertical gap separates groups so the user can see at a glance which
+    /// stack is which.
+    ///
+    /// Each note's existing width/height is preserved — we only move them.
+    /// Both the live window and the storage row are updated so the layout
+    /// survives a restart.
+    pub fn arrange_notes(&self, app: &AppHandle) -> tauri::Result<()> {
+        use std::collections::HashMap;
+
+        let notes = match self.storage.list_notes() {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("arrange_notes: list_notes failed: {}", e);
+                return Ok(());
+            }
+        };
+        let stacks = self.storage.list_stacks().unwrap_or_default();
+
+        // Bucket notes by their stack_id (None for unstacked).
+        let mut by_stack: HashMap<Option<String>, Vec<NoteRecord>> = HashMap::new();
+        for n in notes {
+            by_stack.entry(n.stack_id.clone()).or_default().push(n);
+        }
+
+        // Build the visit order: declared stacks in their sort order, then
+        // unstacked, then any orphan stack ids that didn't match (shouldn't
+        // happen but cheap to guard).
+        let mut groups: Vec<Vec<NoteRecord>> = Vec::new();
+        for s in &stacks {
+            if let Some(g) = by_stack.remove(&Some(s.id.clone())) {
+                groups.push(g);
+            }
+        }
+        if let Some(g) = by_stack.remove(&None) {
+            groups.push(g);
+        }
+        for (_, g) in by_stack.drain() {
+            groups.push(g);
+        }
+
+        // Logical screen size (set_position with LogicalPosition handles HiDPI).
+        let (screen_w, _screen_h) = match app.primary_monitor() {
+            Ok(Some(m)) => {
+                let scale = m.scale_factor();
+                let s = m.size();
+                (s.width as f64 / scale, s.height as f64 / scale)
+            }
+            _ => (1440.0, 900.0),
+        };
+        let margin: f64 = 24.0;
+        let gap: f64 = 12.0;
+        let group_gap: f64 = 28.0;
+        let max_x = screen_w - margin;
+
+        let mut cur_y = margin;
+        for group in groups {
+            if group.is_empty() {
+                continue;
+            }
+            let mut row_x = margin;
+            let mut row_max_h: f64 = 0.0;
+
+            for note in &group {
+                let w = note.width.max(NOTE_MIN_WIDTH);
+                let h = note.height.max(NOTE_MIN_HEIGHT);
+
+                // Wrap to the next row when the next tile wouldn't fit.
+                if row_x + w > max_x && row_x > margin {
+                    cur_y += row_max_h + gap;
+                    row_x = margin;
+                    row_max_h = 0.0;
+                }
+
+                let x = row_x;
+                let y = cur_y;
+
+                let label = Self::note_label(&note.id);
+                if let Some(win) = app.get_webview_window(&label) {
+                    let _ = win.set_position(LogicalPosition::new(x, y));
+                }
+                let _ = self.storage.update_position(&note.id, x, y);
+
+                row_x += w + gap;
+                row_max_h = row_max_h.max(h);
+            }
+
+            cur_y += row_max_h + group_gap;
+        }
+        Ok(())
+    }
+
     pub fn focused_note_id(&self, app: &AppHandle) -> Option<String> {
         for w in app.webview_windows().values() {
             if w.is_focused().unwrap_or(false) {
